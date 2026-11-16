@@ -1,23 +1,60 @@
 'use client';
 
-import { useState, useRef, useCallback } from 'react';
+import { useState, useRef, useCallback, useMemo } from 'react';
+import dynamic from 'next/dynamic';
 import type { ClinReport, Lang } from '@/lib/types';
 import { t } from '@/lib/i18n/strings';
 import { SAMPLE_CASES } from '@/lib/ai/samples';
+import { SidebarNav, type ViewId } from './sidebar-nav';
+import AIChat from '@/components/AIChat';
+import { Activity, Search, ArrowRight, Heart, Brain, Stethoscope, Shield, AlertTriangle, Pill, TrendingUp, Clipboard, ChevronRight, BarChart3 } from 'lucide-react';
+
+const AnatomyViewer3D = dynamic(() => import('@/components/AnatomyViewer3D'), { ssr: false, loading: () => (
+  <div className="w-full h-full flex items-center justify-center bg-[#060d18] rounded-xl">
+    <div className="text-center">
+      <div className="w-10 h-10 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto mb-3" />
+      <p className="text-xs text-white/40">Loading 3D Anatomy Engine...</p>
+    </div>
+  </div>
+)});
 
 type Stage = 'idle' | 'running' | 'done' | 'error';
 type ResultTab = 'overview' | 'differential' | 'medsafety' | 'assessment';
 
-import BodyMap from '@/components/BodyMap';
+/* ------------------------------------------------------------------ */
+/*  Shared UI Components                                               */
+/* ------------------------------------------------------------------ */
+function Panel({ children, className, style }: { children: React.ReactNode; className?: string; style?: React.CSSProperties }) {
+  return <div className={`bg-[#070e1a]/60 border border-white/[0.06] rounded-xl backdrop-blur-sm ${className || ''}`} style={style}>{children}</div>;
+}
 
-const REGION_LABELS: Record<string, string> = {
-  head: 'Head / Cranial', neck: 'Neck / Cervical', chest: 'Thorax',
-  abdomen: 'Abdomen', pelvis: 'Pelvis', 'left-arm': 'Left Upper Limb',
-  'right-arm': 'Right Upper Limb', 'left-leg': 'Left Lower Limb',
-  'right-leg': 'Right Lower Limb', back: 'Back / Spinal',
-};
+function StatCard({ label, value, sub, color }: { label: string; value: string | number; sub?: string; color: string }) {
+  return (
+    <Panel className="p-4 flex flex-col gap-1">
+      <span className="text-[10px] uppercase tracking-wider text-white/30 font-semibold">{label}</span>
+      <span className={`text-2xl font-bold ${color}`}>{value}</span>
+      {sub && <span className="text-[10px] text-white/40">{sub}</span>}
+    </Panel>
+  );
+}
 
+function SectionTitle({ icon, title, sub }: { icon: React.ReactNode; title: string; sub?: string }) {
+  return (
+    <div className="flex items-center gap-3 mb-4">
+      <div className="w-8 h-8 rounded-lg bg-emerald-500/10 flex items-center justify-center text-emerald-400">{icon}</div>
+      <div>
+        <h2 className="text-sm font-semibold text-white">{title}</h2>
+        {sub && <p className="text-[10px] text-white/40">{sub}</p>}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/*  Main Page                                                          */
+/* ------------------------------------------------------------------ */
 export default function Home() {
+  const [activeView, setActiveView] = useState<ViewId>('dashboard');
   const [caseText, setCaseText] = useState('');
   const [selectedLang, setSelectedLang] = useState<Lang | 'auto'>('auto');
   const [uiLang, setUiLang] = useState<Lang>('en');
@@ -26,33 +63,19 @@ export default function Home() {
   const [baseReport, setBaseReport] = useState<ClinReport | null>(null);
   const [error, setError] = useState('');
   const [switching, setSwitching] = useState(false);
-  const [activeRegions, setActiveRegions] = useState<Set<string>>(new Set());
   const [resultTab, setResultTab] = useState<ResultTab>('overview');
+  const [searchQuery, setSearchQuery] = useState('');
+  const [headerSearch, setHeaderSearch] = useState('');
 
-  const resultsRef = useRef<HTMLDivElement>(null);
-
-  const toggleRegion = useCallback((id: string) => {
-    setActiveRegions(prev => {
-      const s = new Set(prev);
-      if (s.has(id)) s.delete(id); else s.add(id);
-      return s;
-    });
-  }, []);
-
-  async function handleAnalyse() {
-    if (!caseText.trim()) return;
+  async function handleAnalyse(text?: string) {
+    const finalText = text || caseText;
+    if (!finalText.trim()) return;
+    setCaseText(finalText);
     setStage('running'); setReport(null); setBaseReport(null); setError('');
-
-    let fullText = caseText;
-    if (activeRegions.size > 0) {
-      const names = Array.from(activeRegions).map(id => REGION_LABELS[id] ?? id);
-      fullText += `\nPain locations: ${names.join(', ')}`;
-    }
-
     try {
       const res = await fetch('/api/analyze', {
         method: 'POST', headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ caseText: fullText, lang: selectedLang }),
+        body: JSON.stringify({ caseText: finalText, lang: selectedLang }),
       });
       const data = await res.json();
       if (!res.ok) throw new Error(data.error || 'Analysis failed');
@@ -60,7 +83,7 @@ export default function Home() {
       setBaseReport(data as ClinReport);
       setUiLang(data.lang);
       setStage('done');
-      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
+      setActiveView('analysis');
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       setStage('error');
@@ -79,563 +102,761 @@ export default function Home() {
       if (!res.ok) throw new Error(data.error);
       setReport(data as ClinReport);
       setUiLang(lang);
-    } catch { /* keep current */ }
-    setSwitching(false);
+    } catch {} finally { setSwitching(false); }
   }
 
-  const isLoading = stage === 'running';
-  const stats = {
-    flags: report?.redFlags.length ?? 0,
-    dx: report?.differential.length ?? 0,
-    meds: report?.medSafety.length ?? 0,
-    conf: report?.differential[0] ? Math.round(report.differential[0].confidence * 100) : 0,
-  };
+  function handleHeaderSearch() {
+    if (headerSearch.trim()) {
+      setSearchQuery(headerSearch);
+      setActiveView('search');
+    }
+  }
 
   return (
-    <div className="space-y-5 animate-fade-in-up">
-      {/* Stats Row */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
-        <StatCard label="Red Flags" value={stage === 'done' ? String(stats.flags) : '—'} color={stats.flags > 0 ? 'red' : 'emerald'}
-          icon={<path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />} />
-        <StatCard label="Differentials" value={stage === 'done' ? String(stats.dx) : '—'} color="blue"
-          icon={<path d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2m-3 7h3m-3 4h3m-6-4h.01M9 16h.01" />} />
-        <StatCard label="Med Alerts" value={stage === 'done' ? String(stats.meds) : '—'} color={stats.meds > 0 ? 'amber' : 'emerald'}
-          icon={<path d="M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z" />} />
-        <StatCard label="Top Confidence" value={stage === 'done' ? `${stats.conf}%` : '—%'} color="emerald"
-          icon={<path d="M13 10V3L4 14h7v7l9-11h-7z" />} />
-      </div>
+    <div className="flex min-h-screen">
+      <SidebarNav activeView={activeView} onViewChange={setActiveView} />
 
-      {/* Loading */}
-      {isLoading && (
-        <div className="panel p-4 animate-fade-in-up">
+      <div className="flex-1 flex flex-col min-w-0">
+        {/* Header */}
+        <header className="h-[52px] shrink-0 border-b border-white/[0.04] bg-[#04070e]/70 backdrop-blur-xl flex items-center justify-between px-6 no-print">
+          <div className="flex items-center gap-4">
+            <h1 className="text-[15px] font-semibold text-white tracking-tight cursor-pointer" onClick={() => setActiveView('dashboard')}>ClinReason</h1>
+            <div className="h-4 w-px bg-white/[0.08]" />
+            <span className="text-[9px] text-emerald-400/60 font-semibold uppercase tracking-[0.15em] border border-emerald-500/15 rounded-full px-2.5 py-[3px] bg-emerald-500/[0.04]">
+              Clinical Decision Support
+            </span>
+          </div>
           <div className="flex items-center gap-3">
-            <span className="w-5 h-5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
-            <span className="text-sm text-emerald-300 font-medium">Processing clinical case…</span>
+            <div className="relative">
+              <input type="text" value={headerSearch} onChange={e => setHeaderSearch(e.target.value)}
+                onKeyDown={e => { if (e.key === 'Enter') handleHeaderSearch(); }}
+                placeholder="Search conditions, drugs, ICD-10…"
+                className="w-56 h-[30px] bg-white/[0.03] border border-white/[0.06] rounded-lg px-3 pl-7 text-[11px] text-slate-300 placeholder-slate-600 focus:outline-none focus:border-emerald-500/25 focus:bg-white/[0.05] transition-all" />
+              <Search className="absolute left-2 top-1/2 -translate-y-1/2 w-3 h-3 text-slate-600" />
+            </div>
+            <div className="w-[30px] h-[30px] rounded-lg bg-gradient-to-br from-emerald-500/15 to-teal-500/15 border border-emerald-500/15 flex items-center justify-center">
+              <span className="text-[10px] font-bold text-emerald-400">Z</span>
+            </div>
+          </div>
+        </header>
+
+        <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 lg:p-6">
+          {activeView === 'dashboard' && <DashboardView onNavigate={setActiveView} report={report} stage={stage} />}
+          {activeView === 'patient' && <PatientView caseText={caseText} setCaseText={setCaseText} selectedLang={selectedLang} setSelectedLang={setSelectedLang} onAnalyse={handleAnalyse} stage={stage} />}
+          {activeView === 'anatomy' && <AnatomyViewWrapper />}
+          {activeView === 'analysis' && <AnalysisView report={report} stage={stage} error={error} resultTab={resultTab} setResultTab={setResultTab} uiLang={uiLang} onSwitchLang={handleSwitchLang} switching={switching} />}
+          {activeView === 'assessment' && <AssessmentView report={report} />}
+          {activeView === 'search' && <SearchView initialQuery={searchQuery} />}
+          {activeView === 'tracking' && <TrackingView />}
+          {activeView === 'settings' && <SettingsView />}
+        </main>
+
+        <footer className="h-7 shrink-0 border-t border-white/[0.03] bg-[#04070e]/50 flex items-center justify-between px-6 no-print">
+          <div className="flex items-center gap-2.5">
+            <div className="w-[5px] h-[5px] rounded-full bg-emerald-500 animate-pulse" />
+            <span className="text-[9px] text-slate-500 font-medium">System Online</span>
+            <span className="text-[9px] text-slate-700">·</span>
+            <span className="text-[9px] text-slate-600">v3.0 — 3D Anatomy · 120 Conditions · 155 Interactions · Deterministic Engine</span>
+          </div>
+          <span className="text-[9px] text-slate-600">Built by <span className="text-slate-500">Zolentix</span></span>
+        </footer>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  DASHBOARD VIEW                                                     */
+/* ================================================================== */
+function DashboardView({ onNavigate, report, stage }: { onNavigate: (v: ViewId) => void; report: ClinReport | null; stage: Stage }) {
+  return (
+    <div className="max-w-6xl mx-auto space-y-6">
+      {/* Hero */}
+      <div className="relative overflow-hidden rounded-2xl bg-gradient-to-br from-emerald-500/[0.07] to-cyan-500/[0.04] border border-emerald-500/10 p-8">
+        <div className="relative z-10">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="w-10 h-10 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center shadow-lg shadow-emerald-500/20">
+              <Activity className="w-5 h-5 text-white" strokeWidth={2.5} />
+            </div>
+            <div>
+              <h1 className="text-xl font-bold text-white">ClinReason Engine</h1>
+              <p className="text-[11px] text-white/50">Deterministic Clinical Reasoning · No API Dependencies</p>
+            </div>
+          </div>
+          <p className="text-sm text-white/60 max-w-lg mb-6">
+            Differential diagnosis, red flag triage, drug interaction screening, and multilingual support — all running locally with a comprehensive medical knowledge base.
+          </p>
+          <div className="flex gap-3">
+            <button onClick={() => onNavigate('patient')} className="px-5 py-2.5 bg-emerald-500 hover:bg-emerald-400 rounded-lg text-sm font-semibold text-white transition-all flex items-center gap-2">
+              <Stethoscope className="w-4 h-4" /> New Assessment <ArrowRight className="w-3.5 h-3.5" />
+            </button>
+            <button onClick={() => onNavigate('anatomy')} className="px-5 py-2.5 bg-white/[0.06] hover:bg-white/[0.1] border border-white/[0.08] rounded-lg text-sm font-medium text-white/80 transition-all flex items-center gap-2">
+              <Heart className="w-4 h-4" /> 3D Anatomy Explorer
+            </button>
           </div>
         </div>
-      )}
+        <div className="absolute right-0 top-0 w-64 h-64 bg-emerald-500/[0.03] rounded-full blur-3xl" />
+      </div>
 
-      {/* Main Grid */}
-      <div className="grid grid-cols-12 gap-5">
-        {/* Left Column */}
-        <div className="col-span-12 lg:col-span-5 space-y-4">
-          <Panel id="section-input" title="Patient Presentation" iconPath="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z">
-            <textarea
-              className="w-full h-32 bg-white/[0.03] border border-white/[0.06] rounded-xl p-3.5 text-[13px] text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 focus:border-emerald-500/25 resize-none transition-all"
-              placeholder={t(uiLang, 'inputPlaceholder')}
-              value={caseText} onChange={e => setCaseText(e.target.value)} disabled={isLoading}
-            />
-            <div className="flex items-center gap-2 mt-3">
-              <span className="text-[9px] uppercase tracking-widest text-slate-500 font-semibold">Lang</span>
+      {/* Stats Row */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Conditions" value="120" sub="Across 15 body systems" color="text-emerald-400" />
+        <StatCard label="Drug Interactions" value="155" sub="Severity-graded pairs" color="text-amber-400" />
+        <StatCard label="Red Flag Rules" value="53" sub="Emergency detection" color="text-red-400" />
+        <StatCard label="Drug Names" value="170+" sub="NLP recognition" color="text-cyan-400" />
+      </div>
+
+      {/* Quick Actions */}
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
+        {[
+          { icon: <Brain className="w-5 h-5" />, title: 'AI Patient Intake', desc: 'Guided conversational assessment with AI-powered clinical reasoning', view: 'patient' as ViewId, color: 'from-violet-500/10 to-purple-500/10 border-violet-500/10' },
+          { icon: <Heart className="w-5 h-5" />, title: '3D Anatomy Explorer', desc: '150+ structures, 6 system layers, interactive rotation and zoom', view: 'anatomy' as ViewId, color: 'from-rose-500/10 to-pink-500/10 border-rose-500/10' },
+          { icon: <Search className="w-5 h-5" />, title: 'Knowledge Base', desc: 'Search conditions, drugs, ICD-10 codes, and clinical guidelines', view: 'search' as ViewId, color: 'from-cyan-500/10 to-teal-500/10 border-cyan-500/10' },
+        ].map(item => (
+          <button key={item.title} onClick={() => onNavigate(item.view)}
+            className={`p-5 rounded-xl bg-gradient-to-br ${item.color} border text-left hover:scale-[1.02] transition-all group`}>
+            <div className="text-white/70 mb-2 group-hover:text-white/90 transition-colors">{item.icon}</div>
+            <h3 className="text-sm font-semibold text-white mb-1">{item.title}</h3>
+            <p className="text-[11px] text-white/40 leading-relaxed">{item.desc}</p>
+          </button>
+        ))}
+      </div>
+
+      {/* Engine capabilities */}
+      <Panel className="p-6">
+        <h3 className="text-sm font-semibold text-white mb-4">Engine Capabilities</h3>
+        <div className="grid grid-cols-2 md:grid-cols-3 gap-4">
+          {[
+            { label: 'Differential Diagnosis', desc: 'Score-based ranking across 120 conditions' },
+            { label: 'Red Flag Detection', desc: '53 rule-based emergency patterns' },
+            { label: 'Drug Safety', desc: '155 interaction pairs with severity grading' },
+            { label: 'NLP Intake', desc: 'Regex parsing: vitals, drugs, symptoms, history' },
+            { label: 'Multilingual', desc: 'English, French, Italian translation engine' },
+            { label: '15 Body Systems', desc: 'Cardiac to ophthalmological coverage' },
+            { label: 'ICD-10 Coding', desc: 'Automatic classification codes' },
+            { label: 'Clinical Guidelines', desc: 'ESC, BTS, NICE, KDIGO references' },
+            { label: 'Zero API Calls', desc: 'Fully deterministic, offline-capable' },
+          ].map(cap => (
+            <div key={cap.label} className="p-3 bg-white/[0.02] rounded-lg border border-white/[0.04]">
+              <div className="text-[11px] font-semibold text-white/80 mb-0.5">{cap.label}</div>
+              <div className="text-[10px] text-white/35">{cap.desc}</div>
+            </div>
+          ))}
+        </div>
+      </Panel>
+
+      {/* Recent results */}
+      {report && stage === 'done' && (
+        <Panel className="p-6">
+          <div className="flex items-center justify-between mb-4">
+            <h3 className="text-sm font-semibold text-white">Last Analysis Result</h3>
+            <button onClick={() => onNavigate('analysis')} className="text-[11px] text-emerald-400 hover:text-emerald-300 flex items-center gap-1">
+              View Full Results <ChevronRight className="w-3 h-3" />
+            </button>
+          </div>
+          <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+            <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block">Red Flags</span><span className="text-lg font-bold text-red-400">{report.redFlags.length}</span></div>
+            <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block">Differentials</span><span className="text-lg font-bold text-emerald-400">{report.differential.length}</span></div>
+            <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block">Drug Alerts</span><span className="text-lg font-bold text-amber-400">{report.medSafety.length}</span></div>
+            <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block">Top Confidence</span><span className="text-lg font-bold text-cyan-400">{report.differential[0] ? `${Math.round(report.differential[0].confidence * 100)}%` : '—'}</span></div>
+          </div>
+        </Panel>
+      )}
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  PATIENT VIEW                                                       */
+/* ================================================================== */
+function PatientView({ caseText, setCaseText, selectedLang, setSelectedLang, onAnalyse, stage }: {
+  caseText: string; setCaseText: (s: string) => void;
+  selectedLang: Lang | 'auto'; setSelectedLang: (l: Lang | 'auto') => void;
+  onAnalyse: (text?: string) => void; stage: Stage;
+}) {
+  return (
+    <div className="max-w-6xl mx-auto space-y-6">
+      <SectionTitle icon={<Stethoscope className="w-4 h-4" />} title="Patient Presentation" sub="AI-guided intake or manual case entry" />
+
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-5">
+        {/* AI Chat */}
+        <div className="h-[600px]">
+          <AIChat onCaseReady={(text) => onAnalyse(text)} />
+        </div>
+
+        {/* Manual Entry */}
+        <div className="space-y-4">
+          <Panel className="p-5">
+            <h3 className="text-xs font-semibold text-white/70 mb-3 uppercase tracking-wider">Manual Case Entry</h3>
+            <textarea value={caseText} onChange={e => setCaseText(e.target.value)}
+              placeholder="e.g. 58-year-old man, 2 hours of central chest pain radiating to the left arm, sweating and short of breath. History of smoking and high cholesterol. Takes simvastatin."
+              className="w-full h-40 bg-white/[0.03] border border-white/[0.08] rounded-lg p-3 text-xs text-white/80 resize-none outline-none focus:border-emerald-500/30 placeholder:text-white/20" />
+
+            <div className="flex items-center gap-3 mt-3">
+              <span className="text-[10px] text-white/30 font-semibold uppercase">Lang</span>
               {(['auto','en','fr','it'] as const).map(l => (
                 <button key={l} onClick={() => setSelectedLang(l)}
-                  className={`px-2 py-0.5 rounded-md text-[10px] font-semibold transition-all ${
-                    selectedLang === l ? 'bg-emerald-500/12 text-emerald-400 border border-emerald-500/25' : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                  }`}>{l === 'auto' ? 'AUTO' : l.toUpperCase()}</button>
+                  className={`px-2.5 py-1 rounded text-[10px] font-medium transition-all ${
+                    selectedLang === l ? 'bg-emerald-500/20 text-emerald-400 border border-emerald-500/30' : 'text-white/30 hover:text-white/50'
+                  }`}>{l.toUpperCase()}</button>
               ))}
             </div>
-            <button onClick={handleAnalyse} disabled={isLoading || !caseText.trim()}
-              className="w-full mt-3 py-2.5 rounded-xl bg-gradient-to-r from-emerald-600 to-teal-600 hover:from-emerald-500 hover:to-teal-500 disabled:from-slate-800 disabled:to-slate-800 disabled:text-slate-600 text-white font-semibold text-sm transition-all btn-glow shadow-lg shadow-emerald-500/10 hover:shadow-emerald-500/25 disabled:shadow-none">
-              {isLoading ? (
-                <span className="flex items-center justify-center gap-2">
-                  <span className="w-3.5 h-3.5 border-2 border-white/30 border-t-white rounded-full animate-spin" />
-                  {t(uiLang, 'analysing')}
-                </span>
+
+            <button onClick={() => onAnalyse()} disabled={!caseText.trim() || stage === 'running'}
+              className="w-full mt-4 py-3 bg-gradient-to-r from-emerald-500 to-teal-500 hover:from-emerald-400 hover:to-teal-400 disabled:opacity-40 rounded-lg text-sm font-semibold text-white transition-all flex items-center justify-center gap-2">
+              {stage === 'running' ? (
+                <><div className="w-4 h-4 border-2 border-white/30 border-t-white rounded-full animate-spin" /> Analysing...</>
               ) : (
-                <span className="flex items-center justify-center gap-2">
-                  <svg className="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M13 10V3L4 14h7v7l9-11h-7z" /></svg>
-                  {t(uiLang, 'analyseBtn')}
-                </span>
+                <><Activity className="w-4 h-4" /> Analyse</>
               )}
             </button>
-            <div className="mt-3">
-              <p className="text-[9px] uppercase tracking-widest text-slate-500 font-semibold mb-2">Quick Load</p>
-              {SAMPLE_CASES.map(sc => (
-                <button key={sc.id} onClick={() => setCaseText(sc.text)} disabled={isLoading}
-                  className="w-full text-left px-3 py-1.5 mb-1 rounded-lg bg-white/[0.02] border border-white/[0.04] text-[11px] text-slate-400 hover:bg-white/[0.05] hover:border-white/[0.1] hover:text-slate-200 transition-all disabled:opacity-30 flex items-center gap-2">
-                  <span className="w-1 h-1 rounded-full bg-emerald-500/50 shrink-0" />
-                  {sc.label[uiLang]}
+          </Panel>
+
+          {/* Quick Load Samples */}
+          <Panel className="p-5">
+            <h3 className="text-xs font-semibold text-white/70 mb-3 uppercase tracking-wider">Sample Cases</h3>
+            <div className="space-y-2">
+              {SAMPLE_CASES.map((s, i) => (
+                <button key={i} onClick={() => setCaseText(s.text)}
+                  className="w-full text-left px-3 py-2.5 rounded-lg bg-white/[0.02] border border-white/[0.04] hover:bg-white/[0.05] hover:border-white/[0.08] transition-all group">
+                  <div className="text-[11px] font-medium text-white/70 group-hover:text-white/90">{typeof s.label === 'string' ? s.label : s.label.en}</div>
+                  <div className="text-[10px] text-white/30 mt-0.5 truncate">{s.text.slice(0, 80)}…</div>
                 </button>
               ))}
             </div>
           </Panel>
+        </div>
+      </div>
+    </div>
+  );
+}
 
-          {/* Anatomical Body Map */}
-          <Panel id="section-anatomy" title="Anatomical Localisation" iconPath="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
-            <BodyMap
-              activeRegions={activeRegions}
-              onToggleRegion={toggleRegion}
-              highlightedSystems={report ? report.differential.slice(0, 3).flatMap(d => d.system ? [d.system] : []) : undefined}
-            />
+/* ================================================================== */
+/*  ANATOMY VIEW                                                       */
+/* ================================================================== */
+function AnatomyViewWrapper() {
+  const [selectedInfo, setSelectedInfo] = useState<{ region: string; info: string } | null>(null);
+  return (
+    <div className="max-w-6xl mx-auto space-y-4">
+      <SectionTitle icon={<Heart className="w-4 h-4" />} title="3D Anatomy Explorer"
+        sub="Interactive multi-layer anatomical model · Rotate, zoom, toggle systems" />
+      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
+        <Panel className="overflow-hidden" style={{ height: '70vh', minHeight: 500 }}>
+          <AnatomyViewer3D onSelectRegion={(region, info) => setSelectedInfo({ region, info })} className="w-full h-full" />
+        </Panel>
+        <div className="space-y-3">
+          <Panel className="p-4">
+            <h3 className="text-xs font-semibold text-white/70 mb-2">Controls</h3>
+            <ul className="text-[10px] text-white/40 space-y-1.5">
+              <li>🖱️ <span className="text-white/60">Left drag</span> — Rotate</li>
+              <li>🖱️ <span className="text-white/60">Scroll</span> — Zoom in/out</li>
+              <li>🎯 <span className="text-white/60">Click structure</span> — View details</li>
+              <li>🔘 <span className="text-white/60">Layer toggles</span> — Show/hide systems</li>
+              <li>📐 <span className="text-white/60">Camera presets</span> — Front, back, side, top</li>
+            </ul>
           </Panel>
-
-          {/* Actions (post-analysis) */}
-          {stage === 'done' && (
-            <Panel id="section-actions" title="Actions" iconPath="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4">
-              <div className="grid grid-cols-3 gap-2">
-                <ActionBtn label="Print" onClick={() => window.print()}
-                  icon={<path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />} />
-                <ActionBtn label="Export" onClick={() => {
-                  if (!report) return;
-                  const b = new Blob([JSON.stringify(report, null, 2)], { type: 'application/json' });
-                  const u = URL.createObjectURL(b); const a = document.createElement('a');
-                  a.href = u; a.download = 'clinreason-report.json'; a.click(); URL.revokeObjectURL(u);
-                }} icon={<path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />} />
-                <ActionBtn label="New Case" onClick={() => { setCaseText(''); setReport(null); setBaseReport(null); setStage('idle'); setActiveRegions(new Set()); }}
-                  icon={<path d="M12 4v16m8-8H4" />} />
-              </div>
+          {selectedInfo && (
+            <Panel className="p-4">
+              <h3 className="text-xs font-semibold text-white/70 mb-2">Selected Structure</h3>
+              <div className="text-[11px] text-white/80 mb-1">{selectedInfo.info}</div>
+              <span className="text-[10px] text-emerald-400/60 px-2 py-0.5 bg-emerald-500/10 rounded">Region: {selectedInfo.region}</span>
             </Panel>
           )}
-        </div>
-
-        {/* Right Column */}
-        <div className="col-span-12 lg:col-span-7 space-y-4" ref={resultsRef}>
-          {stage === 'error' && (
-            <div className="panel p-5 animate-fade-in-up border-red-500/20 bg-red-500/[0.03]">
-              <div className="flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-red-500/10 flex items-center justify-center shrink-0">
-                  <svg className="w-5 h-5 text-red-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" /></svg>
+          <Panel className="p-4">
+            <h3 className="text-xs font-semibold text-white/70 mb-2">Systems</h3>
+            <div className="space-y-1.5 text-[10px]">
+              {[
+                { label: 'Surface', desc: '18 body shapes', color: '#deb896' },
+                { label: 'Skeletal', desc: '50+ bones & vertebrae', color: '#f5f0e0' },
+                { label: 'Organs', desc: '24 internal organs', color: '#e05577' },
+                { label: 'Muscular', desc: '24 muscle groups', color: '#cc3344' },
+                { label: 'Vascular', desc: '14 arteries & veins', color: '#cc2200' },
+                { label: 'Nervous', desc: '21 nerve pathways', color: '#ffd700' },
+              ].map(s => (
+                <div key={s.label} className="flex items-center gap-2 text-white/50">
+                  <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
+                  <span className="text-white/70 font-medium">{s.label}</span>
+                  <span className="text-white/30">— {s.desc}</span>
                 </div>
-                <div>
-                  <p className="text-sm font-semibold text-red-300">Analysis Failed</p>
-                  <p className="text-xs text-red-400/60 mt-0.5">{error}</p>
+              ))}
+            </div>
+          </Panel>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  ANALYSIS VIEW                                                      */
+/* ================================================================== */
+function AnalysisView({ report, stage, error, resultTab, setResultTab, uiLang, onSwitchLang, switching }: {
+  report: ClinReport | null; stage: Stage; error: string;
+  resultTab: ResultTab; setResultTab: (t: ResultTab) => void;
+  uiLang: Lang; onSwitchLang: (l: Lang) => void; switching: boolean;
+}) {
+  if (stage === 'idle') return (
+    <div className="max-w-4xl mx-auto text-center py-20">
+      <div className="w-16 h-16 rounded-2xl bg-emerald-500/10 flex items-center justify-center mx-auto mb-4">
+        <Stethoscope className="w-8 h-8 text-emerald-400/50" />
+      </div>
+      <h2 className="text-lg font-semibold text-white/60 mb-2">No Analysis Yet</h2>
+      <p className="text-sm text-white/30">Go to the Patient view to submit a clinical case for analysis.</p>
+    </div>
+  );
+
+  if (stage === 'running') return (
+    <div className="max-w-4xl mx-auto text-center py-20">
+      <div className="w-12 h-12 border-2 border-emerald-500/30 border-t-emerald-500 rounded-full animate-spin mx-auto mb-4" />
+      <p className="text-sm text-white/50">Running differential diagnosis engine...</p>
+    </div>
+  );
+
+  if (stage === 'error') return (
+    <div className="max-w-4xl mx-auto text-center py-20">
+      <AlertTriangle className="w-10 h-10 text-red-400/60 mx-auto mb-3" />
+      <h2 className="text-lg font-semibold text-red-400/80 mb-2">Analysis Error</h2>
+      <p className="text-sm text-white/40">{error}</p>
+    </div>
+  );
+
+  if (!report) return null;
+
+  const riskScore = Math.min(100, report.redFlags.length * 25 + report.medSafety.length * 15 + (report.differential[0]?.confidence ?? 0) * 50);
+  const riskLevel = riskScore >= 75 ? 'HIGH RISK' : riskScore >= 40 ? 'MODERATE RISK' : 'LOW RISK';
+  const riskColor = riskScore >= 75 ? 'text-red-400' : riskScore >= 40 ? 'text-amber-400' : 'text-emerald-400';
+  const emergencies = report.redFlags.filter(f => f.severity === 'emergency').length;
+  const urgent = report.redFlags.filter(f => f.severity === 'urgent').length;
+
+  return (
+    <div className="max-w-6xl mx-auto space-y-5">
+      <SectionTitle icon={<BarChart3 className="w-4 h-4" />} title="Analysis Results" sub={`${report.differential.length} differentials · ${report.lang.toUpperCase()}`} />
+
+      {/* Stats */}
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        <StatCard label="Red Flags" value={report.redFlags.length} color="text-red-400" />
+        <StatCard label="Differentials" value={report.differential.length} color="text-emerald-400" />
+        <StatCard label="Med Alerts" value={report.medSafety.length} color="text-amber-400" />
+        <StatCard label="Top Confidence" value={report.differential[0] ? `${Math.round(report.differential[0].confidence * 100)}%` : '—'} color="text-cyan-400" />
+      </div>
+
+      {/* Tabs + Language */}
+      <div className="flex items-center justify-between">
+        <div className="flex gap-1">
+          {(['overview','differential','medsafety','assessment'] as ResultTab[]).map(tab => (
+            <button key={tab} onClick={() => setResultTab(tab)}
+              className={`px-3.5 py-1.5 rounded-lg text-[11px] font-medium transition-all ${
+                resultTab === tab ? 'bg-emerald-500/15 text-emerald-400 border border-emerald-500/20' : 'text-white/40 hover:text-white/60'
+              }`}>{tab === 'medsafety' ? 'Med Safety' : tab.charAt(0).toUpperCase() + tab.slice(1)}</button>
+          ))}
+        </div>
+        <div className="flex items-center gap-2">
+          <span className="text-[10px] text-white/30">Switch Language</span>
+          {(['en','fr','it'] as Lang[]).map(l => (
+            <button key={l} onClick={() => onSwitchLang(l)} disabled={switching}
+              className={`px-2 py-0.5 rounded text-[10px] font-medium transition-all ${
+                uiLang === l ? 'bg-emerald-500/20 text-emerald-400' : 'text-white/30 hover:text-white/50'
+              }`}>{l.toUpperCase()}</button>
+          ))}
+        </div>
+      </div>
+
+      {/* Tab Content */}
+      <Panel className="p-5 min-h-[300px]">
+        {resultTab === 'overview' && (
+          <div className="space-y-5">
+            <div className="flex items-center gap-6">
+              <div className="relative w-20 h-20">
+                <svg viewBox="0 0 36 36" className="w-20 h-20 -rotate-90">
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" className="text-white/[0.06]" strokeWidth="3" />
+                  <circle cx="18" cy="18" r="15.9" fill="none" stroke="currentColor" className={riskColor} strokeWidth="3"
+                    strokeDasharray={`${riskScore} ${100 - riskScore}`} strokeLinecap="round" />
+                </svg>
+                <div className="absolute inset-0 flex items-center justify-center">
+                  <span className={`text-lg font-bold ${riskColor}`}>{Math.round(riskScore)}</span>
+                </div>
+              </div>
+              <div>
+                <div className={`text-[10px] font-bold uppercase tracking-wider ${riskColor} mb-1`}>{riskLevel}</div>
+                <div className="text-sm text-white/70">Risk Assessment</div>
+                <div className="flex gap-4 mt-2 text-[10px] text-white/40">
+                  <span><span className="text-red-400 font-bold">{emergencies}</span> Emergencies</span>
+                  <span><span className="text-amber-400 font-bold">{urgent}</span> Urgent</span>
+                  <span><span className="text-cyan-400 font-bold">{report.medSafety.length}</span> Drug Alerts</span>
                 </div>
               </div>
             </div>
-          )}
-
-          {stage === 'idle' && <IdleState />}
-
-          {report && stage === 'done' && (
-            <div className="space-y-4 animate-fade-in-up" id="section-results">
-              {/* Tabs */}
-              <div className="flex gap-1 bg-white/[0.02] rounded-xl p-1 border border-white/[0.05]">
-                {([
-                  { key: 'overview' as ResultTab, label: 'Overview' },
-                  { key: 'differential' as ResultTab, label: 'Differential' },
-                  { key: 'medsafety' as ResultTab, label: 'Med Safety' },
-                  { key: 'assessment' as ResultTab, label: 'Assessment' },
-                ]).map(tb => (
-                  <button key={tb.key} onClick={() => setResultTab(tb.key)}
-                    className={`flex-1 py-1.5 rounded-lg text-[11px] font-semibold transition-all ${
-                      resultTab === tb.key
-                        ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20 shadow-sm'
-                        : 'text-slate-500 hover:text-slate-300 border border-transparent'
-                    }`}>{tb.label}</button>
+            {report.redFlags.length > 0 && (
+              <div>
+                <h4 className="text-xs font-semibold text-white/60 mb-2">Emergency / Urgent Flags</h4>
+                {report.redFlags.map((f, i) => (
+                  <div key={i} className="p-3 bg-red-500/[0.04] border border-red-500/10 rounded-lg mb-2">
+                    <div className="flex items-center gap-2 mb-1">
+                      <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${f.severity === 'emergency' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>{f.severity}</span>
+                      <span className="text-xs font-medium text-white/80">{f.flag}</span>
+                    </div>
+                    <p className="text-[10px] text-white/40">{f.matched.join(', ')}</p>
+                    {f.action && <p className="text-[10px] text-emerald-400/60 mt-1">{f.action}</p>}
+                  </div>
                 ))}
               </div>
+            )}
+            {report.redFlags.length === 0 && <p className="text-xs text-white/30 flex items-center gap-2"><Shield className="w-4 h-4 text-emerald-400/40" /> No emergency pattern detected</p>}
 
-              {/* Lang switcher */}
-              <div className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <span className="text-[9px] uppercase tracking-widest text-slate-600 font-semibold">{t(uiLang, 'switchLang')}</span>
-                  {(['en','fr','it'] as Lang[]).map(l => (
-                    <button key={l} onClick={() => handleSwitchLang(l)} disabled={switching}
-                      className={`px-2 py-0.5 rounded text-[10px] font-semibold transition-all ${
-                        uiLang === l ? 'bg-emerald-500/12 text-emerald-400 border border-emerald-500/25' : 'text-slate-500 border border-transparent'
-                      } ${switching ? 'opacity-40' : ''}`}>{l.toUpperCase()}</button>
-                  ))}
-                  {switching && <span className="text-[9px] text-emerald-400/60 animate-pulse">Translating…</span>}
+            <div>
+              <h4 className="text-xs font-semibold text-white/60 mb-2">Differential Diagnosis</h4>
+              {report.differential.slice(0, 3).map((d, i) => (
+                <div key={i} className="flex items-center gap-3 mb-2">
+                  <span className="text-[11px] font-bold text-white/30 w-5">{i + 1}.</span>
+                  <div className="flex-1">
+                    <div className="flex items-center gap-2">
+                      <span className="text-xs font-semibold text-white/80">{d.condition}</span>
+                      <span className="text-[10px] font-bold text-emerald-400">{Math.round(d.confidence * 100)}%</span>
+                    </div>
+                    <div className="w-full h-1.5 bg-white/[0.04] rounded-full mt-1 overflow-hidden">
+                      <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full transition-all" style={{ width: `${d.confidence * 100}%` }} />
+                    </div>
+                  </div>
                 </div>
-                <span className="text-[9px] text-slate-600">{report.differential.length} dx · {report.medSafety.length} alerts</span>
-              </div>
-
-              {resultTab === 'overview' && <OverviewTab report={report} lang={uiLang} />}
-              {resultTab === 'differential' && <DiffTab report={report} lang={uiLang} />}
-              {resultTab === 'medsafety' && <MedTab report={report} lang={uiLang} />}
-              {resultTab === 'assessment' && <AssessTab report={report} lang={uiLang} />}
+              ))}
             </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-/* ═══ Sub-components ═══ */
-
-function StatCard({ label, value, color, icon }: { label: string; value: string; color: string; icon: React.ReactNode }) {
-  const cls = color === 'red' ? 'stat-red' : color === 'amber' ? 'stat-amber' : color === 'blue' ? 'stat-blue' : 'stat-emerald';
-  const textCls = color === 'red' ? 'text-red-400' : color === 'amber' ? 'text-amber-400' : color === 'blue' ? 'text-blue-400' : 'text-emerald-400';
-  return (
-    <div className={`panel p-3.5 ${cls}`}>
-      <div className="flex items-center justify-between mb-2">
-        <span className="text-[10px] uppercase tracking-wider text-slate-500 font-semibold">{label}</span>
-        <svg className={`w-4 h-4 ${textCls} opacity-50`} fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">{icon}</svg>
-      </div>
-      <p className={`text-2xl font-bold ${textCls} tracking-tight`}>{value}</p>
-    </div>
-  );
-}
-
-function Panel({ title, iconPath, children, id }: { title: string; iconPath: string; children: React.ReactNode; id?: string }) {
-  return (
-    <div className="panel p-4" id={id}>
-      <div className="flex items-center gap-2 mb-3">
-        <svg className="w-4 h-4 text-emerald-400/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d={iconPath} /></svg>
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">{title}</h3>
-      </div>
-      {children}
-    </div>
-  );
-}
-
-function ActionBtn({ label, icon, onClick }: { label: string; icon: React.ReactNode; onClick: () => void }) {
-  return (
-    <button onClick={onClick} className="flex items-center justify-center gap-1.5 py-2 rounded-lg bg-white/[0.03] border border-white/[0.06] text-[11px] text-slate-400 hover:text-white hover:border-white/[0.12] transition-all">
-      <svg className="w-3.5 h-3.5" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">{icon}</svg>
-      {label}
-    </button>
-  );
-}
-
-function IdleState() {
-  return (
-    <div className="panel p-8 flex flex-col items-center justify-center min-h-[400px] text-center glow-border">
-      <div className="w-16 h-16 rounded-2xl bg-gradient-to-br from-emerald-500/10 to-teal-500/10 border border-emerald-500/15 flex items-center justify-center mb-5 animate-float">
-        <svg className="w-7 h-7 text-emerald-400/60" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5">
-          <path d="M22 12h-4l-3 9L9 3l-3 9H2" />
-        </svg>
-      </div>
-      <h2 className="text-lg font-semibold text-white mb-2">Clinical Reasoning Engine</h2>
-      <p className="text-sm text-slate-500 max-w-md leading-relaxed mb-6">
-        Enter a patient presentation on the left to run the deterministic clinical pipeline — differential diagnosis, red flag triage, and medication safety, with multilingual support.
-      </p>
-      <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
-        {[
-          { title: 'Differential', desc: 'Ranked diagnoses', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2' },
-          { title: 'Red Flags', desc: 'Triage screening', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
-          { title: 'Med Safety', desc: '155 drug interactions', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
-        ].map(f => (
-          <div key={f.title} className="text-center p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-            <svg className="w-5 h-5 text-emerald-400/50 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d={f.icon} /></svg>
-            <p className="text-[11px] font-semibold text-slate-300 mt-1">{f.title}</p>
-            <p className="text-[9px] text-slate-500 mt-0.5">{f.desc}</p>
           </div>
-        ))}
-      </div>
-      <div className="flex items-center gap-3 mt-6 text-[10px] text-slate-600">
-        <span>EN / FR / IT</span>
-        <span>·</span>
-        <span>ICD-10 Codes</span>
-        <span>·</span>
-        <span>120 Conditions</span>
-        <span>·</span>
-        <span>No API Required</span>
-      </div>
-    </div>
-  );
-}
+        )}
 
-/* Overview Tab */
-function OverviewTab({ report, lang }: { report: ClinReport; lang: Lang }) {
-  return (
-    <div className="space-y-4">
-      <div className="panel p-4 glow-border">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Risk Assessment</h3>
-          <RiskBadge flags={report.redFlags.length} meds={report.medSafety.length} />
-        </div>
-        <div className="flex items-center gap-5">
-          <RiskRing value={report.redFlags.length > 0 ? 85 : report.medSafety.length > 0 ? 55 : 20} />
-          <div className="flex-1 grid grid-cols-3 gap-3">
-            <MiniStat label="Emergencies" value={report.redFlags.filter(r => r.severity === 'emergency').length} color="red" />
-            <MiniStat label="Urgent" value={report.redFlags.filter(r => r.severity === 'urgent').length} color="amber" />
-            <MiniStat label="Drug Alerts" value={report.medSafety.length} color="blue" />
-          </div>
-        </div>
-      </div>
-
-      <div className="panel p-4" id="section-redflags">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">{t(lang, 'redFlagsTitle')}</h3>
-        {report.redFlags.length === 0 ? (
-          <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/[0.04] border border-emerald-500/15">
-            <svg className="w-4 h-4 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2"><path d="M5 13l4 4L19 7" /></svg>
-            <span className="text-[12px] text-emerald-300">{t(lang, 'noRedFlags')}</span>
-          </div>
-        ) : (
-          <div className="space-y-2">
-            {report.redFlags.map((rf, i) => (
-              <div key={i} className={`rounded-xl border px-4 py-3 transition-all hover:translate-x-0.5 ${
-                rf.severity === 'emergency' ? 'bg-red-500/[0.04] border-red-500/20' : 'bg-amber-500/[0.04] border-amber-500/20'
-              }`}>
-                <div className="flex items-center gap-2 mb-1">
-                  <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
-                    rf.severity === 'emergency' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300'
-                  }`}>{t(lang, rf.severity)}</span>
-                  <span className="text-[13px] font-semibold text-white">{rf.pattern}</span>
+        {resultTab === 'differential' && (
+          <div className="space-y-3">
+            <div className="text-[10px] text-white/30 mb-3">Top {report.differential.length} differential diagnoses, ranked by feature matching score</div>
+            {report.differential.map((d, i) => (
+              <div key={i} className="p-4 bg-white/[0.02] border border-white/[0.04] rounded-lg">
+                <div className="flex items-start justify-between mb-2">
+                  <div>
+                    <span className="text-sm font-semibold text-white/90">{d.condition}</span>
+                    {d.icd10 && <span className="text-[10px] text-white/30 ml-2">{d.icd10}</span>}
+                  </div>
+                  <span className="text-sm font-bold text-emerald-400">{Math.round(d.confidence * 100)}%</span>
                 </div>
-                <p className="text-[11px] text-slate-400 mt-1">{rf.why}</p>
-                <p className="text-[11px] text-slate-200 mt-1 font-medium">{rf.action}</p>
+                <div className="w-full h-1.5 bg-white/[0.04] rounded-full mb-3 overflow-hidden">
+                  <div className="h-full bg-gradient-to-r from-emerald-500 to-teal-500 rounded-full" style={{ width: `${d.confidence * 100}%` }} />
+                </div>
+                <p className="text-[11px] text-white/50 leading-relaxed mb-2">{d.rationale}</p>
+                {d.supporting.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {d.supporting.map((s, si) => <span key={si} className="text-[9px] px-2 py-0.5 rounded-full bg-emerald-500/10 text-emerald-400/70 border border-emerald-500/10">{s}</span>)}
+                  </div>
+                )}
+                {d.opposing.length > 0 && (
+                  <div className="flex flex-wrap gap-1 mb-2">
+                    {d.opposing.map((o, oi) => <span key={oi} className="text-[9px] px-2 py-0.5 rounded-full bg-red-500/10 text-red-400/70 border border-red-500/10">{o}</span>)}
+                  </div>
+                )}
+                <div className="text-[10px] text-cyan-400/60 mt-2">Next step: {d.nextStep}</div>
+                {d.citations?.map((c, ci) => <div key={ci} className="text-[9px] text-white/25 mt-1">📖 {c.source} — {c.note}</div>)}
               </div>
             ))}
           </div>
         )}
+
+        {resultTab === 'medsafety' && (
+          <div className="space-y-3">
+            {report.medSafety.length === 0 ? (
+              <div className="text-center py-10">
+                <Shield className="w-10 h-10 text-emerald-400/30 mx-auto mb-3" />
+                <p className="text-sm text-white/40">No medication safety issues identified</p>
+                <p className="text-[10px] text-white/20 mt-1">Add medications to the patient description to check for interactions</p>
+              </div>
+            ) : (
+              report.medSafety.map((m, i) => (
+                <div key={i} className={`p-4 rounded-lg border ${m.severity === 'severe' ? 'bg-red-500/[0.04] border-red-500/10' : m.severity === 'moderate' ? 'bg-amber-500/[0.04] border-amber-500/10' : 'bg-cyan-500/[0.04] border-cyan-500/10'}`}>
+                  <div className="flex items-center gap-2 mb-2">
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${m.severity === 'severe' ? 'bg-red-500/20 text-red-400' : m.severity === 'moderate' ? 'bg-amber-500/20 text-amber-400' : 'bg-cyan-500/20 text-cyan-400'}`}>{m.severity}</span>
+                    <span className="text-[10px] text-white/40">{m.type.replace(/_/g, ' ')}</span>
+                  </div>
+                  <h4 className="text-sm font-semibold text-white/80 mb-1">{m.pair}</h4>
+                  <p className="text-[11px] text-white/50 leading-relaxed">{m.detail}</p>
+                  {m.recommendation && <p className="text-[10px] text-emerald-400/60 mt-2">💡 {m.recommendation}</p>}
+                </div>
+              ))
+            )}
+          </div>
+        )}
+
+        {resultTab === 'assessment' && <AssessmentContent report={report} />}
+      </Panel>
+    </div>
+  );
+}
+
+function AssessmentContent({ report }: { report: ClinReport }) {
+  const riskScore = Math.min(100, report.redFlags.length * 25 + report.medSafety.length * 15 + (report.differential[0]?.confidence ?? 0) * 50);
+  return (
+    <div className="space-y-4">
+      <div className="grid grid-cols-3 gap-3 text-center">
+        <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block mb-1">Risk Score</span><span className="text-2xl font-bold text-emerald-400">{Math.round(riskScore)}/100</span></div>
+        <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block mb-1">Systems Involved</span><span className="text-2xl font-bold text-cyan-400">{new Set(report.differential.map(d => (d as any).system).filter(Boolean)).size}</span></div>
+        <div className="p-3 bg-white/[0.02] rounded-lg"><span className="text-[10px] text-white/30 block mb-1">Drugs Flagged</span><span className="text-2xl font-bold text-amber-400">{report.medSafety.length}</span></div>
+      </div>
+      <div>
+        <h4 className="text-xs font-semibold text-white/60 mb-2">Recommended Next Steps</h4>
+        <ul className="space-y-2">
+          {report.differential.slice(0, 3).map((d, i) => (
+            <li key={i} className="flex gap-2 text-[11px]">
+              <span className="text-emerald-400 font-bold shrink-0">{i + 1}.</span>
+              <div>
+                <span className="text-white/70 font-medium">{d.condition}:</span>{' '}
+                <span className="text-white/40">{d.nextStep}</span>
+              </div>
+            </li>
+          ))}
+        </ul>
+      </div>
+      <div className="text-[10px] text-white/20 p-3 bg-white/[0.02] rounded-lg border border-white/[0.04]">
+        ⚠️ This is a clinical decision support tool for educational purposes. It does not replace clinical judgement. Always correlate with the full clinical picture.
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  ASSESSMENT VIEW (standalone)                                       */
+/* ================================================================== */
+function AssessmentView({ report }: { report: ClinReport | null }) {
+  if (!report) return (
+    <div className="max-w-4xl mx-auto text-center py-20">
+      <Clipboard className="w-10 h-10 text-white/20 mx-auto mb-3" />
+      <h2 className="text-lg font-semibold text-white/50 mb-2">No Assessment Available</h2>
+      <p className="text-sm text-white/30">Run an analysis first to see the clinical assessment.</p>
+    </div>
+  );
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      <SectionTitle icon={<Clipboard className="w-4 h-4" />} title="Clinical Assessment" sub="Comprehensive risk evaluation" />
+      <Panel className="p-6"><AssessmentContent report={report} /></Panel>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  SEARCH / KNOWLEDGE VIEW                                            */
+/* ================================================================== */
+function SearchView({ initialQuery }: { initialQuery?: string }) {
+  const [query, setQuery] = useState(initialQuery || '');
+  const [results, setResults] = useState<any[]>([]);
+  const [conditionsData, setConditionsData] = useState<any[]>([]);
+  const [interactionsData, setInteractionsData] = useState<any[]>([]);
+  const [loaded, setLoaded] = useState(false);
+
+  const loadData = useCallback(async () => {
+    if (loaded) return;
+    try {
+      const [cRes, iRes] = await Promise.all([
+        fetch('/api/knowledge/conditions').then(r => r.ok ? r.json() : []).catch(() => []),
+        fetch('/api/knowledge/interactions').then(r => r.ok ? r.json() : []).catch(() => []),
+      ]);
+      setConditionsData(Array.isArray(cRes) ? cRes : []);
+      setInteractionsData(Array.isArray(iRes) ? iRes : []);
+      setLoaded(true);
+    } catch { setLoaded(true); }
+  }, [loaded]);
+
+  const handleSearch = useCallback(() => {
+    if (!query.trim()) { setResults([]); return; }
+    loadData();
+    const q = query.toLowerCase();
+    const found: any[] = [];
+    for (const c of conditionsData) {
+      if (c.name?.toLowerCase().includes(q) || c.icd10?.toLowerCase().includes(q) || c.system?.toLowerCase().includes(q)) {
+        found.push({ type: 'condition', ...c });
+      }
+    }
+    for (const ix of interactionsData) {
+      if (ix.pair?.toLowerCase().includes(q) || ix.drug1?.toLowerCase().includes(q) || ix.drug2?.toLowerCase().includes(q)) {
+        found.push({ type: 'interaction', ...ix });
+      }
+    }
+    setResults(found.slice(0, 20));
+  }, [query, conditionsData, interactionsData, loadData]);
+
+  return (
+    <div className="max-w-4xl mx-auto space-y-5">
+      <SectionTitle icon={<Search className="w-4 h-4" />} title="Knowledge Base" sub="Search 120 conditions, 155 drug interactions, ICD-10 codes" />
+
+      <div className="flex gap-2">
+        <input value={query} onChange={e => setQuery(e.target.value)}
+          onKeyDown={e => { if (e.key === 'Enter') handleSearch(); }}
+          placeholder="Search conditions, drugs, ICD-10 codes..."
+          className="flex-1 bg-white/[0.03] border border-white/[0.08] rounded-lg px-4 py-3 text-sm text-white/80 outline-none focus:border-emerald-500/30 placeholder:text-white/20" />
+        <button onClick={handleSearch}
+          className="px-5 py-3 bg-emerald-500/80 hover:bg-emerald-500 rounded-lg text-sm font-medium text-white transition-all">
+          Search
+        </button>
       </div>
 
-      <div className="panel p-4" id="section-differential">
-        <div className="flex items-center justify-between mb-3">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">{t(lang, 'differentialTitle')}</h3>
-          <span className="text-[9px] text-slate-600">Top 3 shown</span>
-        </div>
+      <div className="text-[10px] text-white/30">
+        Try: "chest pain", "warfarin", "I21", "cardiac", "STEMI"
+      </div>
+
+      {results.length > 0 && (
         <div className="space-y-2">
-          {report.differential.slice(0, 3).map((d, i) => (
-            <DxCard key={i} item={d} rank={i + 1} lang={lang} compact />
+          {results.map((r, i) => (
+            <Panel key={i} className="p-4">
+              {r.type === 'condition' ? (
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className="text-xs font-semibold text-white/80">{r.name}</span>
+                    {r.icd10 && <span className="text-[9px] text-white/30 bg-white/[0.04] px-1.5 py-0.5 rounded">{r.icd10}</span>}
+                    <span className="text-[9px] text-emerald-400/50 bg-emerald-500/10 px-1.5 py-0.5 rounded">{r.system}</span>
+                  </div>
+                  {r.typicalFeatures && <p className="text-[10px] text-white/40 mt-1">Features: {r.typicalFeatures.slice(0, 5).join(', ')}</p>}
+                  {r.riskFactors && r.riskFactors.length > 0 && <p className="text-[10px] text-white/30 mt-0.5">Risk factors: {r.riskFactors.join(', ')}</p>}
+                </div>
+              ) : (
+                <div>
+                  <div className="flex items-center gap-2 mb-1">
+                    <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${r.severity === 'severe' ? 'bg-red-500/20 text-red-400' : 'bg-amber-500/20 text-amber-400'}`}>{r.severity}</span>
+                    <span className="text-xs font-semibold text-white/80">{r.pair || `${r.drug1} + ${r.drug2}`}</span>
+                  </div>
+                  {r.detail && <p className="text-[10px] text-white/40 mt-1">{r.detail}</p>}
+                </div>
+              )}
+            </Panel>
           ))}
         </div>
-      </div>
-    </div>
-  );
-}
+      )}
 
-/* Differential Tab */
-function DiffTab({ report, lang }: { report: ClinReport; lang: Lang }) {
-  return (
-    <div className="space-y-3">
-      {report.differential.map((d, i) => <DxCard key={i} item={d} rank={i + 1} lang={lang} />)}
-      {report.differential.length === 0 && (
-        <div className="panel p-6 text-center">
-          <p className="text-sm text-slate-400">No matching conditions found. Try providing more clinical detail.</p>
-        </div>
+      {results.length === 0 && query && loaded && (
+        <div className="text-center py-10 text-sm text-white/30">No results found for "{query}"</div>
       )}
     </div>
   );
 }
 
-function DxCard({ item, rank, lang, compact }: { item: ClinReport['differential'][number]; rank: number; lang: Lang; compact?: boolean }) {
-  const [open, setOpen] = useState(false);
-  const pct = Math.round(item.confidence * 100);
-  const barColor = pct >= 70 ? 'bg-emerald-500' : pct >= 40 ? 'bg-amber-500' : 'bg-blue-500';
+/* ================================================================== */
+/*  TRACKING VIEW                                                      */
+/* ================================================================== */
+function TrackingView() {
+  const [meds, setMeds] = useState<{ name: string; dose: string; time: string }[]>([
+    { name: 'Aspirin', dose: '75mg', time: '08:00' },
+    { name: 'Simvastatin', dose: '40mg', time: '22:00' },
+  ]);
+  const [newMed, setNewMed] = useState({ name: '', dose: '', time: '' });
+  const [meals, setMeals] = useState<{ desc: string; time: string; cal: string }[]>([]);
+  const [newMeal, setNewMeal] = useState({ desc: '', time: '', cal: '' });
+  const [exercise, setExercise] = useState<{ type: string; duration: string; date: string }[]>([]);
+  const [newEx, setNewEx] = useState({ type: '', duration: '', date: '' });
 
   return (
-    <div className="panel p-4 hover:border-white/[0.1] transition-all">
-      <div className="flex items-start justify-between mb-2">
-        <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/8 w-6 h-6 rounded-lg flex items-center justify-center">{rank}</span>
-          <div>
-            <h4 className="text-[13px] font-semibold text-white">{item.condition}</h4>
-            {item.icd10 && <span className="text-[9px] text-slate-500 font-mono">{item.icd10}</span>}
+    <div className="max-w-4xl mx-auto space-y-6">
+      <SectionTitle icon={<TrendingUp className="w-4 h-4" />} title="Health Tracking" sub="Medication, nutrition, and exercise logging" />
+
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-5">
+        {/* Medications */}
+        <Panel className="p-4">
+          <h3 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-2"><Pill className="w-3.5 h-3.5 text-cyan-400" /> Medications</h3>
+          <div className="space-y-2 mb-3">
+            {meds.map((m, i) => (
+              <div key={i} className="flex items-center justify-between p-2 bg-white/[0.02] rounded-lg text-[11px]">
+                <div><span className="text-white/70 font-medium">{m.name}</span> <span className="text-white/30">{m.dose}</span></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/20">{m.time}</span>
+                  <button onClick={() => setMeds(prev => prev.filter((_, j) => j !== i))} className="text-red-400/40 hover:text-red-400 text-[10px]">✕</button>
+                </div>
+              </div>
+            ))}
+          </div>
+          <div className="space-y-1.5">
+            <input placeholder="Drug name" value={newMed.name} onChange={e => setNewMed(p => ({...p, name: e.target.value}))} className="w-full bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none focus:border-emerald-500/30" />
+            <div className="flex gap-1.5">
+              <input placeholder="Dose" value={newMed.dose} onChange={e => setNewMed(p => ({...p, dose: e.target.value}))} className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none" />
+              <input placeholder="Time" value={newMed.time} onChange={e => setNewMed(p => ({...p, time: e.target.value}))} className="w-16 bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none" />
+            </div>
+            <button onClick={() => { if(newMed.name) { setMeds(p => [...p, newMed]); setNewMed({name:'',dose:'',time:''}); } }}
+              className="w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/20 rounded text-[10px] text-emerald-400 font-medium transition-all">+ Add</button>
+          </div>
+        </Panel>
+
+        {/* Nutrition */}
+        <Panel className="p-4">
+          <h3 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-2">🍽️ Nutrition</h3>
+          <div className="space-y-2 mb-3">
+            {meals.map((m, i) => (
+              <div key={i} className="flex items-center justify-between p-2 bg-white/[0.02] rounded-lg text-[11px]">
+                <div><span className="text-white/70">{m.desc}</span></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/20">{m.cal} kcal</span>
+                  <button onClick={() => setMeals(prev => prev.filter((_, j) => j !== i))} className="text-red-400/40 hover:text-red-400 text-[10px]">✕</button>
+                </div>
+              </div>
+            ))}
+            {meals.length === 0 && <p className="text-[10px] text-white/20 text-center py-3">No meals logged</p>}
+          </div>
+          <div className="space-y-1.5">
+            <input placeholder="Meal description" value={newMeal.desc} onChange={e => setNewMeal(p => ({...p, desc: e.target.value}))} className="w-full bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none focus:border-emerald-500/30" />
+            <div className="flex gap-1.5">
+              <input placeholder="Calories" value={newMeal.cal} onChange={e => setNewMeal(p => ({...p, cal: e.target.value}))} className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none" />
+              <input placeholder="Time" value={newMeal.time} onChange={e => setNewMeal(p => ({...p, time: e.target.value}))} className="w-16 bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none" />
+            </div>
+            <button onClick={() => { if(newMeal.desc) { setMeals(p => [...p, newMeal]); setNewMeal({desc:'',time:'',cal:''}); } }}
+              className="w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/20 rounded text-[10px] text-emerald-400 font-medium transition-all">+ Add</button>
+          </div>
+        </Panel>
+
+        {/* Exercise */}
+        <Panel className="p-4">
+          <h3 className="text-xs font-semibold text-white/70 mb-3 flex items-center gap-2">🏃 Exercise</h3>
+          <div className="space-y-2 mb-3">
+            {exercise.map((e, i) => (
+              <div key={i} className="flex items-center justify-between p-2 bg-white/[0.02] rounded-lg text-[11px]">
+                <div><span className="text-white/70">{e.type}</span></div>
+                <div className="flex items-center gap-2">
+                  <span className="text-white/20">{e.duration}</span>
+                  <button onClick={() => setExercise(prev => prev.filter((_, j) => j !== i))} className="text-red-400/40 hover:text-red-400 text-[10px]">✕</button>
+                </div>
+              </div>
+            ))}
+            {exercise.length === 0 && <p className="text-[10px] text-white/20 text-center py-3">No exercise logged</p>}
+          </div>
+          <div className="space-y-1.5">
+            <input placeholder="Activity type" value={newEx.type} onChange={e => setNewEx(p => ({...p, type: e.target.value}))} className="w-full bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none focus:border-emerald-500/30" />
+            <div className="flex gap-1.5">
+              <input placeholder="Duration" value={newEx.duration} onChange={e => setNewEx(p => ({...p, duration: e.target.value}))} className="flex-1 bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none" />
+              <input placeholder="Date" value={newEx.date} onChange={e => setNewEx(p => ({...p, date: e.target.value}))} className="w-20 bg-white/[0.03] border border-white/[0.06] rounded px-2 py-1.5 text-[10px] text-white/70 outline-none" />
+            </div>
+            <button onClick={() => { if(newEx.type) { setExercise(p => [...p, newEx]); setNewEx({type:'',duration:'',date:''}); } }}
+              className="w-full py-1.5 bg-emerald-500/15 hover:bg-emerald-500/25 border border-emerald-500/20 rounded text-[10px] text-emerald-400 font-medium transition-all">+ Add</button>
+          </div>
+        </Panel>
+      </div>
+    </div>
+  );
+}
+
+/* ================================================================== */
+/*  SETTINGS VIEW                                                      */
+/* ================================================================== */
+function SettingsView() {
+  return (
+    <div className="max-w-2xl mx-auto space-y-5">
+      <SectionTitle icon={<Activity className="w-4 h-4" />} title="Settings" sub="Application configuration" />
+      <Panel className="p-6">
+        <div className="space-y-4">
+          <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg">
+            <div><div className="text-xs font-medium text-white/70">Engine Mode</div><div className="text-[10px] text-white/30">Fully deterministic — no external API calls</div></div>
+            <span className="text-[10px] text-emerald-400 bg-emerald-500/10 px-2 py-0.5 rounded">Offline</span>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg">
+            <div><div className="text-xs font-medium text-white/70">Knowledge Base</div><div className="text-[10px] text-white/30">120 conditions · 155 interactions · 53 red flags</div></div>
+            <span className="text-[10px] text-cyan-400 bg-cyan-500/10 px-2 py-0.5 rounded">v3.0</span>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg">
+            <div><div className="text-xs font-medium text-white/70">3D Anatomy</div><div className="text-[10px] text-white/30">150+ structures · 6 system layers · Three.js WebGL</div></div>
+            <span className="text-[10px] text-violet-400 bg-violet-500/10 px-2 py-0.5 rounded">Active</span>
+          </div>
+          <div className="flex items-center justify-between p-3 bg-white/[0.02] rounded-lg">
+            <div><div className="text-xs font-medium text-white/70">Languages</div><div className="text-[10px] text-white/30">English, French, Italian</div></div>
+            <span className="text-[10px] text-amber-400 bg-amber-500/10 px-2 py-0.5 rounded">3 langs</span>
           </div>
         </div>
-        <span className="text-sm font-bold text-emerald-300 font-mono">{pct}%</span>
-      </div>
-
-      <div className="w-full h-1 bg-white/[0.04] rounded-full mb-3">
-        <div className={`h-full ${barColor} rounded-full confidence-bar`} style={{ width: `${pct}%` }} />
-      </div>
-
-      {!compact && (
-        <>
-          <div className="grid grid-cols-2 gap-3 mb-3">
-            <div>
-              <p className="text-[9px] font-semibold text-emerald-400/80 uppercase tracking-wider mb-1">{t(lang, 'supporting')}</p>
-              <ul className="space-y-0.5">
-                {item.supporting.map((s, i) => (
-                  <li key={i} className="text-[11px] text-slate-300 flex items-start gap-1.5">
-                    <span className="text-emerald-400 mt-px text-[10px]">+</span>{s}
-                  </li>
-                ))}
-              </ul>
-            </div>
-            <div>
-              <p className="text-[9px] font-semibold text-slate-500 uppercase tracking-wider mb-1">{t(lang, 'opposing')}</p>
-              <ul className="space-y-0.5">
-                {item.opposing.map((o, i) => (
-                  <li key={i} className="text-[11px] text-slate-400 flex items-start gap-1.5">
-                    <span className="text-slate-500 mt-px text-[10px]">{'−'}</span>{o}
-                  </li>
-                ))}
-                {item.opposing.length === 0 && <li className="text-[10px] text-slate-600 italic">None identified</li>}
-              </ul>
-            </div>
-          </div>
-          <p className="text-[11px] text-slate-300 leading-relaxed mb-2">{item.rationale}</p>
-          <p className="text-[11px] text-emerald-400"><span className="font-semibold">{t(lang, 'nextStep')}:</span> {item.nextStep}</p>
-          {item.citations.length > 0 && (
-            <div className="mt-2">
-              <button onClick={() => setOpen(!open)} className="text-[10px] text-slate-500 hover:text-slate-400 transition-colors">
-                {t(lang, 'citations')} ({item.citations.length}) {open ? '▾' : '▸'}
-              </button>
-              {open && (
-                <ul className="mt-1 space-y-0.5 animate-fade-in">
-                  {item.citations.map((c, i) => (
-                    <li key={i} className="text-[10px] text-slate-500"><span className="font-medium">{c.source}</span> — {c.note}</li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          )}
-        </>
-      )}
-
-      {compact && <p className="text-[11px] text-slate-400 line-clamp-2">{item.rationale}</p>}
-    </div>
-  );
-}
-
-/* Med Safety Tab */
-function MedTab({ report, lang }: { report: ClinReport; lang: Lang }) {
-  if (report.medSafety.length === 0) {
-    return (
-      <div className="panel p-6 text-center">
-        <svg className="w-8 h-8 text-emerald-400/30 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
-        <p className="text-sm text-slate-400">No medication safety issues identified</p>
-        <p className="text-[10px] text-slate-600 mt-1">Add medications to the patient description to check for interactions</p>
-      </div>
-    );
-  }
-  return (
-    <div className="space-y-3">
-      {report.medSafety.map((m, i) => <MedCard key={i} item={m} lang={lang} />)}
-    </div>
-  );
-}
-
-function MedCard({ item, lang }: { item: ClinReport['medSafety'][number]; lang: Lang }) {
-  const sc: Record<string, string> = {
-    severe: 'bg-red-500/15 text-red-300 border-red-500/20',
-    moderate: 'bg-amber-500/15 text-amber-300 border-amber-500/20',
-    mild: 'bg-blue-500/15 text-blue-300 border-blue-500/20',
-  };
-  const kl: Record<string, string> = {
-    interaction: 'Drug Interaction', contraindication: 'Contraindication',
-    dosing: 'Dosing Concern', duplication: 'Duplication',
-  };
-
-  return (
-    <div className="panel p-4 hover:border-white/[0.1] transition-all">
-      <div className="flex items-center gap-2 mb-2">
-        <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded border ${sc[item.severity]}`}>{t(lang, item.severity)}</span>
-        <span className="text-[10px] text-slate-500">{kl[item.kind]}</span>
-      </div>
-      <p className="text-[12px] text-white font-medium mb-1">{item.drugs.join(' + ')}</p>
-      <p className="text-[11px] text-slate-300 leading-relaxed mb-1.5">{item.explanation}</p>
-      <p className="text-[11px] text-emerald-400"><span className="font-semibold">{t(lang, 'recommendation')}:</span> {item.recommendation}</p>
-      {item.citations.length > 0 && <p className="text-[9px] text-slate-600 mt-1.5">{item.citations.map(c => c.source).join(' · ')}</p>}
-    </div>
-  );
-}
-
-/* Assessment Tab */
-function AssessTab({ report, lang }: { report: ClinReport; lang: Lang }) {
-  return (
-    <div className="space-y-4" id="section-assessment">
-      <div className="panel p-5 glow-border">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">{t(lang, 'overallNote')}</h3>
-        <p className="text-[13px] text-slate-200 leading-relaxed">{report.overallNote}</p>
-      </div>
-
-      <div className="panel p-4">
-        <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Clinical Summary</h3>
-        <div className="grid grid-cols-2 gap-3">
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Patient</p>
-            <p className="text-[12px] text-slate-300">{report.case.age ? `${report.case.age}y` : '?'} {report.case.sex ?? 'unknown'}</p>
-          </div>
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Chief Complaint</p>
-            <p className="text-[12px] text-slate-300 line-clamp-2">{report.case.presentingComplaint}</p>
-          </div>
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Medications</p>
-            <p className="text-[12px] text-slate-300">{report.case.medications.length > 0 ? report.case.medications.map(m => m.name).join(', ') : 'None reported'}</p>
-          </div>
-          <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
-            <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Allergies</p>
-            <p className="text-[12px] text-slate-300">{report.case.allergies.length > 0 ? report.case.allergies.join(', ') : 'NKDA'}</p>
-          </div>
-        </div>
-      </div>
-
-      {report.case.vitals && (
-        <div className="panel p-4">
-          <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Vitals Dashboard</h3>
-          <div className="grid grid-cols-5 gap-2">
-            <VitalRing label="HR" value={report.case.vitals.hr} unit="bpm" max={180} color="#10b981" normal={[60, 100]} />
-            <VitalRing label="SpO2" value={report.case.vitals.spo2} unit="%" max={100} color="#3b82f6" normal={[95, 100]} />
-            <VitalRing label="Temp" value={report.case.vitals.temp} unit="°C" max={42} color="#f59e0b" normal={[36.1, 37.2]} />
-            <VitalRing label="RR" value={report.case.vitals.rr} unit="/min" max={40} color="#8b5cf6" normal={[12, 20]} />
-            <div className="flex flex-col items-center justify-center">
-              <span className="text-[9px] text-slate-500 font-semibold uppercase mb-1">BP</span>
-              <span className="text-sm font-bold text-white">{report.case.vitals.bp ?? '—'}</span>
-              <span className="text-[8px] text-slate-600">mmHg</span>
-            </div>
-          </div>
-        </div>
-      )}
-
-      <p className="text-[10px] text-slate-600 text-center italic">{t(lang, 'disclaimer')}</p>
-    </div>
-  );
-}
-
-/* Helper components */
-
-function RiskBadge({ flags, meds }: { flags: number; meds: number }) {
-  const level = flags > 0 ? 'HIGH' : meds > 0 ? 'MODERATE' : 'LOW';
-  const cls = flags > 0 ? 'bg-red-500/15 text-red-300 border-red-500/25' : meds > 0 ? 'bg-amber-500/15 text-amber-300 border-amber-500/25' : 'bg-emerald-500/15 text-emerald-300 border-emerald-500/25';
-  return <span className={`text-[9px] font-bold uppercase px-2 py-0.5 rounded-full border ${cls}`}>{level} RISK</span>;
-}
-
-function RiskRing({ value }: { value: number }) {
-  const circumference = 2 * Math.PI * 38;
-  const offset = circumference - (value / 100) * circumference;
-  const color = value >= 70 ? '#ef4444' : value >= 40 ? '#f59e0b' : '#10b981';
-  return (
-    <div className="relative w-24 h-24 shrink-0">
-      <svg viewBox="0 0 100 100" className="w-full h-full">
-        <circle cx="50" cy="50" r="38" className="ring-track" />
-        <circle cx="50" cy="50" r="38" className="ring-value" stroke={color}
-          strokeDasharray={circumference} strokeDashoffset={offset} style={{ animation: 'ringDraw 1.2s ease-out both' }} />
-      </svg>
-      <div className="absolute inset-0 flex flex-col items-center justify-center">
-        <span className="text-lg font-bold text-white">{value}</span>
-        <span className="text-[8px] text-slate-500 uppercase tracking-wider">Score</span>
-      </div>
-    </div>
-  );
-}
-
-function MiniStat({ label, value, color }: { label: string; value: number; color: string }) {
-  const tc = color === 'red' ? 'text-red-400' : color === 'amber' ? 'text-amber-400' : 'text-blue-400';
-  return (
-    <div className="text-center">
-      <p className={`text-xl font-bold ${tc}`}>{value}</p>
-      <p className="text-[9px] text-slate-500 uppercase tracking-wider mt-0.5">{label}</p>
-    </div>
-  );
-}
-
-function VitalRing({ label, value, unit, max, color, normal }: {
-  label: string; value?: number; unit: string; max: number; color: string; normal: [number, number];
-}) {
-  if (value == null) return (
-    <div className="flex flex-col items-center">
-      <span className="text-[9px] text-slate-500 font-semibold uppercase mb-1">{label}</span>
-      <span className="text-sm text-slate-600">—</span>
-    </div>
-  );
-  const circ = 2 * Math.PI * 22;
-  const pct = Math.min(value / max, 1);
-  const offset = circ - pct * circ;
-  const inRange = value >= normal[0] && value <= normal[1];
-  const ringColor = inRange ? color : '#ef4444';
-
-  return (
-    <div className="flex flex-col items-center">
-      <span className="text-[9px] text-slate-500 font-semibold uppercase mb-1">{label}</span>
-      <div className="relative w-14 h-14">
-        <svg viewBox="0 0 56 56" className="w-full h-full">
-          <circle cx="28" cy="28" r="22" fill="none" stroke="rgba(255,255,255,0.04)" strokeWidth="3" />
-          <circle cx="28" cy="28" r="22" fill="none" stroke={ringColor} strokeWidth="3" strokeLinecap="round"
-            strokeDasharray={circ} strokeDashoffset={offset}
-            style={{ transform: 'rotate(-90deg)', transformOrigin: 'center', animation: 'ringDraw 1s ease-out both' }} />
-        </svg>
-        <div className="absolute inset-0 flex flex-col items-center justify-center">
-          <span className="text-[11px] font-bold text-white">{value}</span>
-        </div>
-      </div>
-      <span className="text-[8px] text-slate-600 mt-0.5">{unit}</span>
+      </Panel>
     </div>
   );
 }
