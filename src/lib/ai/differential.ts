@@ -18,12 +18,21 @@ function caseContains(pc: PatientCase, feature: string): boolean {
 }
 
 const NEXT_STEPS: Record<string, string> = {
-  cardiac: '12-lead ECG and serial troponin levels',
-  respiratory: 'Chest X-ray and arterial blood gas',
-  neuro: 'CT head and full neurological examination',
-  GI: 'Bloods (FBC, U&E, LFTs, amylase), abdominal imaging',
-  infectious: 'Blood cultures, FBC, CRP/PCT, lactate',
-  endocrine: 'Blood glucose, U&E, thyroid function tests',
+  cardiac: '12-lead ECG, serial troponin, BNP if heart failure suspected',
+  respiratory: 'Chest X-ray, arterial blood gas, D-dimer if PE suspected',
+  neuro: 'CT head (non-contrast), full neurological examination, GCS',
+  GI: 'FBC, U&E, LFTs, amylase/lipase, abdominal imaging (CT/USS)',
+  infectious: 'Blood cultures x2, FBC, CRP/PCT, lactate, source-directed imaging',
+  endocrine: 'Blood glucose, U&E, HbA1c, thyroid function tests, cortisol if adrenal',
+  renal: 'U&E, creatinine, eGFR, urinalysis, renal tract ultrasound',
+  musculoskeletal: 'Plain radiograph, inflammatory markers (CRP/ESR), joint aspiration if septic arthritis suspected',
+  vascular: 'Duplex ultrasound, D-dimer, CT angiography if acute limb ischaemia',
+  haematological: 'FBC with film, coagulation screen, fibrinogen, D-dimer, reticulocytes',
+  dermatological: 'Skin biopsy if unclear, wound swab, allergy testing if urticaria',
+  psychiatric: 'Mental state examination, collateral history, urine drug screen, bloods to exclude organic cause',
+  obstetric: 'Serum beta-hCG, transvaginal ultrasound, FBC, group and save',
+  ENT: 'Flexible nasendoscopy, CT sinuses/neck if abscess suspected, audiometry if hearing loss',
+  ophthalmological: 'Visual acuity, intraocular pressure, slit-lamp examination, dilated fundoscopy',
 };
 
 const GUIDELINES: Record<string, { source: string; note: string }> = {
@@ -33,6 +42,15 @@ const GUIDELINES: Record<string, { source: string; note: string }> = {
   GI: { source: 'BSG Guidelines', note: 'British Society of Gastroenterology clinical guidelines' },
   infectious: { source: 'NICE / Sepsis Trust', note: 'UK Sepsis Trust and NICE clinical guidelines' },
   endocrine: { source: 'Endocrine Society', note: 'Endocrine Society clinical practice guidelines' },
+  renal: { source: 'KDIGO Guidelines', note: 'Kidney Disease: Improving Global Outcomes clinical practice guidelines' },
+  musculoskeletal: { source: 'EULAR / BOA', note: 'European League Against Rheumatism and British Orthopaedic Association guidelines' },
+  vascular: { source: 'ESVS Guidelines', note: 'European Society for Vascular Surgery clinical practice guidelines' },
+  haematological: { source: 'BSH Guidelines', note: 'British Society for Haematology clinical guidelines' },
+  dermatological: { source: 'BAD Guidelines', note: 'British Association of Dermatologists clinical guidelines' },
+  psychiatric: { source: 'NICE MH Guidelines', note: 'NICE mental health and behavioural conditions guidelines' },
+  obstetric: { source: 'RCOG Guidelines', note: 'Royal College of Obstetricians and Gynaecologists clinical guidelines' },
+  ENT: { source: 'ENT UK / NICE', note: 'ENT UK and NICE clinical guidelines for ear, nose and throat' },
+  ophthalmological: { source: 'RCOphth Guidelines', note: 'Royal College of Ophthalmologists clinical guidelines' },
 };
 
 export function generateDifferential(patientCase: PatientCase, conditions: Condition[]): DifferentialItem[] {
@@ -87,6 +105,8 @@ export function generateDifferential(patientCase: PatientCase, conditions: Condi
       rationale,
       nextStep: NEXT_STEPS[item.c.system] ?? 'Targeted investigation based on clinical presentation',
       citations: [GUIDELINES[item.c.system] ?? { source: 'Clinical guidelines', note: 'Standard clinical practice' }],
+      system: item.c.system,
+      regions: item.c.regions,
     };
   });
 }

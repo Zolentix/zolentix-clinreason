@@ -8,16 +8,14 @@ import { SAMPLE_CASES } from '@/lib/ai/samples';
 type Stage = 'idle' | 'running' | 'done' | 'error';
 type ResultTab = 'overview' | 'differential' | 'medsafety' | 'assessment';
 
-const BODY_REGIONS = [
-  { id: 'head', label: 'Head / Cranial', cx: 150, cy: 52, rx: 28, ry: 32 },
-  { id: 'neck', label: 'Neck / Cervical', cx: 150, cy: 95, rx: 14, ry: 10 },
-  { id: 'chest', label: 'Chest / Thorax', cx: 150, cy: 140, rx: 44, ry: 34 },
-  { id: 'abdomen', label: 'Abdomen', cx: 150, cy: 195, rx: 38, ry: 26 },
-  { id: 'left-arm', label: 'Left Arm', cx: 82, cy: 170, rx: 15, ry: 60 },
-  { id: 'right-arm', label: 'Right Arm', cx: 218, cy: 170, rx: 15, ry: 60 },
-  { id: 'left-leg', label: 'Left Leg', cx: 130, cy: 320, rx: 18, ry: 80 },
-  { id: 'right-leg', label: 'Right Leg', cx: 170, cy: 320, rx: 18, ry: 80 },
-] as const;
+import BodyMap from '@/components/BodyMap';
+
+const REGION_LABELS: Record<string, string> = {
+  head: 'Head / Cranial', neck: 'Neck / Cervical', chest: 'Thorax',
+  abdomen: 'Abdomen', pelvis: 'Pelvis', 'left-arm': 'Left Upper Limb',
+  'right-arm': 'Right Upper Limb', 'left-leg': 'Left Lower Limb',
+  'right-leg': 'Right Lower Limb', back: 'Back / Spinal',
+};
 
 export default function Home() {
   const [caseText, setCaseText] = useState('');
@@ -47,7 +45,7 @@ export default function Home() {
 
     let fullText = caseText;
     if (activeRegions.size > 0) {
-      const names = Array.from(activeRegions).map(id => BODY_REGIONS.find(b => b.id === id)?.label ?? id);
+      const names = Array.from(activeRegions).map(id => REGION_LABELS[id] ?? id);
       fullText += `\nPain locations: ${names.join(', ')}`;
     }
 
@@ -162,67 +160,13 @@ export default function Home() {
             </div>
           </Panel>
 
-          {/* Body Map */}
-          <Panel id="section-anatomy" title="Pain Localisation" iconPath="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
-            <div className="flex justify-center py-2">
-              <svg viewBox="0 0 300 430" className="w-full max-w-[240px] h-auto">
-                <defs>
-                  <radialGradient id="bodyGlow" cx="50%" cy="35%" r="55%">
-                    <stop offset="0%" stopColor="rgba(16,185,129,0.06)" />
-                    <stop offset="100%" stopColor="transparent" />
-                  </radialGradient>
-                  <linearGradient id="bodyStroke" x1="0" y1="0" x2="0" y2="1">
-                    <stop offset="0%" stopColor="rgba(16,185,129,0.3)" />
-                    <stop offset="100%" stopColor="rgba(59,130,246,0.15)" />
-                  </linearGradient>
-                </defs>
-                <ellipse cx="150" cy="200" rx="120" ry="200" fill="url(#bodyGlow)" />
-                {/* Anatomical outline */}
-                <path d={`
-                  M150,14 C164,14 176,26 176,42 C176,58 164,72 150,72 C136,72 124,58 124,42 C124,26 136,14 150,14 Z
-                  M134,72 C128,76 118,82 110,92 L96,110 C88,120 78,138 74,158 L66,192 C64,200 68,204 74,204 L84,200
-                  L96,158 C98,150 104,134 110,122 L116,112 L118,180 L114,200 L108,280 L102,340 L96,390 L98,400 L120,400 L126,390
-                  L134,340 L142,280 L150,250 L158,280 L166,340 L174,390 L180,400 L202,400 L204,390 L198,340 L192,280 L186,200
-                  L182,180 L184,112 L190,122 C196,134 202,150 204,158 L216,200 L226,204 C232,204 236,200 234,192 L226,158
-                  C222,138 212,120 204,110 L190,92 C182,82 172,76 166,72
-                `} fill="none" stroke="url(#bodyStroke)" strokeWidth="1.5" strokeLinejoin="round" />
-                {/* Spine line */}
-                <line x1="150" y1="75" x2="150" y2="245" stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="3,4" />
-                {/* Rib hints */}
-                {[120, 132, 144, 156].map(y => (
-                  <g key={y}>
-                    <path d={`M125,${y} Q150,${y+8} 175,${y}`} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.8" />
-                  </g>
-                ))}
-                {/* Clickable zones */}
-                {BODY_REGIONS.map(r => (
-                  <ellipse key={r.id} cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry}
-                    className={`body-zone ${activeRegions.has(r.id) ? 'active' : ''}`}
-                    onClick={() => toggleRegion(r.id)} />
-                ))}
-                {/* Labels */}
-                {BODY_REGIONS.map(r => (
-                  <text key={`t-${r.id}`} x={r.cx} y={r.cy + 1} textAnchor="middle" dominantBaseline="central"
-                    className="pointer-events-none select-none"
-                    fill={activeRegions.has(r.id) ? 'rgba(52,211,153,0.95)' : 'rgba(255,255,255,0.25)'}
-                    fontSize="9" fontWeight="600">{r.label.split(' / ')[0]}</text>
-                ))}
-              </svg>
-            </div>
-            <p className="text-[9px] text-center text-slate-600 -mt-1">Click body regions to indicate pain areas</p>
-            {activeRegions.size > 0 && (
-              <div className="flex flex-wrap gap-1.5 mt-2">
-                {Array.from(activeRegions).map(id => {
-                  const r = BODY_REGIONS.find(b => b.id === id);
-                  return (
-                    <span key={id} className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full bg-emerald-500/8 border border-emerald-500/20 text-[10px] text-emerald-400">
-                      {r?.label}
-                      <button onClick={() => toggleRegion(id)} className="hover:text-white">×</button>
-                    </span>
-                  );
-                })}
-              </div>
-            )}
+          {/* Anatomical Body Map */}
+          <Panel id="section-anatomy" title="Anatomical Localisation" iconPath="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+            <BodyMap
+              activeRegions={activeRegions}
+              onToggleRegion={toggleRegion}
+              highlightedSystems={report ? report.differential.slice(0, 3).flatMap(d => d.system ? [d.system] : []) : undefined}
+            />
           </Panel>
 
           {/* Actions (post-analysis) */}
@@ -361,7 +305,7 @@ function IdleState() {
         {[
           { title: 'Differential', desc: 'Ranked diagnoses', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2' },
           { title: 'Red Flags', desc: 'Triage screening', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
-          { title: 'Med Safety', desc: '59 drug interactions', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
+          { title: 'Med Safety', desc: '155 drug interactions', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
         ].map(f => (
           <div key={f.title} className="text-center p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
             <svg className="w-5 h-5 text-emerald-400/50 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d={f.icon} /></svg>
@@ -375,7 +319,7 @@ function IdleState() {
         <span>·</span>
         <span>ICD-10 Codes</span>
         <span>·</span>
-        <span>40 Conditions</span>
+        <span>120 Conditions</span>
         <span>·</span>
         <span>No API Required</span>
       </div>

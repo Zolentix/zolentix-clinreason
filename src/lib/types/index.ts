@@ -1,5 +1,9 @@
 export type Lang = "en" | "fr" | "it";
 
+export type BodySystem = "cardiac" | "respiratory" | "neuro" | "GI" | "renal" | "endocrine" | "musculoskeletal" | "vascular" | "haematological" | "infectious" | "dermatological" | "psychiatric" | "obstetric" | "ENT" | "ophthalmological";
+
+export type BodyRegion = "head" | "neck" | "chest" | "abdomen" | "pelvis" | "upper_limb" | "lower_limb" | "back" | "skin" | "systemic";
+
 export interface PatientCase {
   rawText: string;
   lang: Lang;
@@ -12,6 +16,7 @@ export interface PatientCase {
   medications: { name: string; dose?: string; freq?: string }[];
   allergies: string[];
   riskFactors: string[];
+  selectedRegions?: string[];
 }
 
 export interface RedFlag {
@@ -30,6 +35,8 @@ export interface DifferentialItem {
   rationale: string;
   nextStep: string;
   citations: { source: string; note: string }[];
+  system?: string;
+  regions?: string[];
 }
 
 export interface MedSafetyItem {
@@ -62,9 +69,14 @@ export interface Condition {
   name: string;
   icd10: string;
   system: string;
+  regions?: string[];
   typicalFeatures: string[];
   riskFactors: string[];
   redFlagFeatures: string[];
+  investigations?: string[];
+  keyManagement?: string;
+  prevalence?: "common" | "uncommon" | "rare";
+  acuity?: "hyperacute" | "acute" | "subacute" | "chronic";
 }
 
 export interface Interaction {
