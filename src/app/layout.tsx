@@ -14,6 +14,7 @@ import {
   Search,
 } from "lucide-react";
 import type { LucideIcon } from "lucide-react";
+import { SidebarNav } from "./sidebar-nav";
 
 const geistSans = localFont({
   src: "./fonts/GeistVF.woff",
@@ -26,18 +27,18 @@ export const metadata: Metadata = {
   description: "Multilingual clinical reasoning engine. Differential diagnosis, triage, and medication-safety support.",
 };
 
-const NAV_ITEMS: { icon: LucideIcon; label: string; active?: boolean }[] = [
-  { icon: LayoutDashboard, label: "Dashboard", active: true },
-  { icon: User, label: "Patient" },
-  { icon: Heart, label: "Anatomy" },
-  { icon: BarChart3, label: "Analytics" },
-  { icon: FileText, label: "Reports" },
-  { icon: BookOpen, label: "Knowledge Base" },
+const NAV_ITEMS: { icon: string; label: string; target: string; active?: boolean }[] = [
+  { icon: "LayoutDashboard", label: "Dashboard", target: "top", active: true },
+  { icon: "User", label: "Patient", target: "section-input" },
+  { icon: "Heart", label: "Anatomy", target: "section-anatomy" },
+  { icon: "BarChart3", label: "Results", target: "section-results" },
+  { icon: "FileText", label: "Assessment", target: "section-assessment" },
+  { icon: "BookOpen", label: "Red Flags", target: "section-redflags" },
 ];
 
-const BOTTOM_NAV: { icon: LucideIcon; label: string }[] = [
-  { icon: Bell, label: "Notifications" },
-  { icon: Settings, label: "Settings" },
+const BOTTOM_NAV: { icon: string; label: string; target: string }[] = [
+  { icon: "Bell", label: "Actions", target: "section-actions" },
+  { icon: "Settings", label: "Settings", target: "top" },
 ];
 
 export default function RootLayout({
@@ -50,21 +51,7 @@ export default function RootLayout({
       <body className={`${geistSans.variable} antialiased text-slate-100 min-h-screen`}>
         <div className="flex min-h-screen">
           {/* ── Sidebar ── */}
-          <aside className="w-[60px] shrink-0 bg-[#04070e] border-r border-white/[0.04] flex flex-col items-center py-5 gap-1.5 no-print">
-            <div className="w-9 h-9 rounded-xl bg-gradient-to-br from-emerald-500 to-teal-600 flex items-center justify-center mb-8 shadow-lg shadow-emerald-500/20">
-              <Activity className="w-[18px] h-[18px] text-white" strokeWidth={2.5} />
-            </div>
-
-            {NAV_ITEMS.map((item) => (
-              <SidebarIcon key={item.label} Icon={item.icon} tooltip={item.label} active={item.active} />
-            ))}
-
-            <div className="mt-auto flex flex-col items-center gap-1.5">
-              {BOTTOM_NAV.map((item) => (
-                <SidebarIcon key={item.label} Icon={item.icon} tooltip={item.label} />
-              ))}
-            </div>
-          </aside>
+          <SidebarNav navItems={NAV_ITEMS} bottomNav={BOTTOM_NAV} />
 
           {/* ── Main area ── */}
           <div className="flex-1 flex flex-col min-w-0">
@@ -93,7 +80,7 @@ export default function RootLayout({
               </div>
             </header>
 
-            <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 lg:p-6">
+            <main className="flex-1 overflow-y-auto overflow-x-hidden p-5 lg:p-6" id="top">
               {children}
             </main>
 
@@ -104,7 +91,7 @@ export default function RootLayout({
                   <span className="text-[9px] text-slate-500 font-medium">System Online</span>
                 </div>
                 <span className="text-[9px] text-slate-700">·</span>
-                <span className="text-[9px] text-slate-600">v2.0 — Gemini-Powered · Demo KB · Not a diagnostic device</span>
+                <span className="text-[9px] text-slate-600">v2.0 — Deterministic Engine · Demo KB · Not a diagnostic device</span>
               </div>
               <span className="text-[9px] text-slate-600">Built by <span className="text-slate-500">Zolentix</span></span>
             </footer>
@@ -112,21 +99,5 @@ export default function RootLayout({
         </div>
       </body>
     </html>
-  );
-}
-
-function SidebarIcon({ Icon, active, tooltip }: { Icon: LucideIcon; active?: boolean; tooltip: string }) {
-  return (
-    <div
-      title={tooltip}
-      className={`w-9 h-9 rounded-xl flex items-center justify-center transition-all relative cursor-default ${
-        active
-          ? 'bg-emerald-500/10 text-emerald-400'
-          : 'text-slate-600 hover:text-slate-400 hover:bg-white/[0.03]'
-      }`}
-    >
-      <Icon className="w-[18px] h-[18px]" strokeWidth={1.5} />
-      {active && <div className="absolute left-0 top-1/2 -translate-y-1/2 w-[2px] h-4 bg-emerald-400 rounded-r" />}
-    </div>
   );
 }

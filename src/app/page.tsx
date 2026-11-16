@@ -1,22 +1,22 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import type { ClinReport, Lang } from '@/lib/types';
 import { t } from '@/lib/i18n/strings';
 import { SAMPLE_CASES } from '@/lib/ai/samples';
 
-type Stage = 'idle' | 'intake' | 'redflags' | 'differential' | 'medsafety' | 'localise' | 'done' | 'error';
+type Stage = 'idle' | 'running' | 'done' | 'error';
 type ResultTab = 'overview' | 'differential' | 'medsafety' | 'assessment';
 
 const BODY_REGIONS = [
-  { id: 'head', label: 'Head / Cranial', cx: 120, cy: 35, rx: 22, ry: 26 },
-  { id: 'neck', label: 'Neck / Cervical', cx: 120, cy: 72, rx: 10, ry: 8 },
-  { id: 'chest', label: 'Chest / Thorax', cx: 120, cy: 105, rx: 35, ry: 28 },
-  { id: 'abdomen', label: 'Abdomen', cx: 120, cy: 148, rx: 30, ry: 22 },
-  { id: 'left-arm', label: 'Left Arm', cx: 72, cy: 120, rx: 12, ry: 45 },
-  { id: 'right-arm', label: 'Right Arm', cx: 168, cy: 120, rx: 12, ry: 45 },
-  { id: 'left-leg', label: 'Left Leg', cx: 105, cy: 230, rx: 14, ry: 55 },
-  { id: 'right-leg', label: 'Right Leg', cx: 135, cy: 230, rx: 14, ry: 55 },
+  { id: 'head', label: 'Head / Cranial', cx: 150, cy: 52, rx: 28, ry: 32 },
+  { id: 'neck', label: 'Neck / Cervical', cx: 150, cy: 95, rx: 14, ry: 10 },
+  { id: 'chest', label: 'Chest / Thorax', cx: 150, cy: 140, rx: 44, ry: 34 },
+  { id: 'abdomen', label: 'Abdomen', cx: 150, cy: 195, rx: 38, ry: 26 },
+  { id: 'left-arm', label: 'Left Arm', cx: 82, cy: 170, rx: 15, ry: 60 },
+  { id: 'right-arm', label: 'Right Arm', cx: 218, cy: 170, rx: 15, ry: 60 },
+  { id: 'left-leg', label: 'Left Leg', cx: 130, cy: 320, rx: 18, ry: 80 },
+  { id: 'right-leg', label: 'Right Leg', cx: 170, cy: 320, rx: 18, ry: 80 },
 ] as const;
 
 export default function Home() {
@@ -30,14 +30,8 @@ export default function Home() {
   const [switching, setSwitching] = useState(false);
   const [activeRegions, setActiveRegions] = useState<Set<string>>(new Set());
   const [resultTab, setResultTab] = useState<ResultTab>('overview');
-  const [elapsed, setElapsed] = useState(0);
-  const [startTime, setStartTime] = useState<number | null>(null);
 
-  useEffect(() => {
-    if (!startTime) return;
-    const iv = setInterval(() => setElapsed(Math.floor((Date.now() - startTime) / 1000)), 1000);
-    return () => clearInterval(iv);
-  }, [startTime]);
+  const resultsRef = useRef<HTMLDivElement>(null);
 
   const toggleRegion = useCallback((id: string) => {
     setActiveRegions(prev => {
@@ -49,8 +43,7 @@ export default function Home() {
 
   async function handleAnalyse() {
     if (!caseText.trim()) return;
-    setStage('intake'); setReport(null); setBaseReport(null); setError('');
-    setStartTime(Date.now()); setElapsed(0);
+    setStage('running'); setReport(null); setBaseReport(null); setError('');
 
     let fullText = caseText;
     if (activeRegions.size > 0) {
@@ -69,11 +62,11 @@ export default function Home() {
       setBaseReport(data as ClinReport);
       setUiLang(data.lang);
       setStage('done');
+      setTimeout(() => resultsRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' }), 100);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Unknown error');
       setStage('error');
     }
-    setStartTime(null);
   }
 
   async function handleSwitchLang(lang: Lang) {
@@ -92,7 +85,7 @@ export default function Home() {
     setSwitching(false);
   }
 
-  const isLoading = !['idle', 'done', 'error'].includes(stage);
+  const isLoading = stage === 'running';
   const stats = {
     flags: report?.redFlags.length ?? 0,
     dx: report?.differential.length ?? 0,
@@ -102,7 +95,7 @@ export default function Home() {
 
   return (
     <div className="space-y-5 animate-fade-in-up">
-      {/* ═══ Stats Row ═══ */}
+      {/* Stats Row */}
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-3">
         <StatCard label="Red Flags" value={stage === 'done' ? String(stats.flags) : '—'} color={stats.flags > 0 ? 'red' : 'emerald'}
           icon={<path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z" />} />
@@ -114,14 +107,21 @@ export default function Home() {
           icon={<path d="M13 10V3L4 14h7v7l9-11h-7z" />} />
       </div>
 
-      {/* ═══ Pipeline Progress ═══ */}
-      {isLoading && <PipelineBar stage={stage} elapsed={elapsed} />}
+      {/* Loading */}
+      {isLoading && (
+        <div className="panel p-4 animate-fade-in-up">
+          <div className="flex items-center gap-3">
+            <span className="w-5 h-5 border-2 border-emerald-400/30 border-t-emerald-400 rounded-full animate-spin" />
+            <span className="text-sm text-emerald-300 font-medium">Processing clinical case…</span>
+          </div>
+        </div>
+      )}
 
-      {/* ═══ Main Grid ═══ */}
+      {/* Main Grid */}
       <div className="grid grid-cols-12 gap-5">
-        {/* ── Left Column ── */}
+        {/* Left Column */}
         <div className="col-span-12 lg:col-span-5 space-y-4">
-          <Panel title="Patient Presentation" iconPath="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z">
+          <Panel id="section-input" title="Patient Presentation" iconPath="M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z">
             <textarea
               className="w-full h-32 bg-white/[0.03] border border-white/[0.06] rounded-xl p-3.5 text-[13px] text-slate-200 placeholder-slate-600 focus:outline-none focus:ring-1 focus:ring-emerald-500/30 focus:border-emerald-500/25 resize-none transition-all"
               placeholder={t(uiLang, 'inputPlaceholder')}
@@ -162,23 +162,41 @@ export default function Home() {
             </div>
           </Panel>
 
-          {/* ── Body Map ── */}
-          <Panel title="Pain Localisation" iconPath="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
+          {/* Body Map */}
+          <Panel id="section-anatomy" title="Pain Localisation" iconPath="M4.318 6.318a4.5 4.5 0 000 6.364L12 20.364l7.682-7.682a4.5 4.5 0 00-6.364-6.364L12 7.636l-1.318-1.318a4.5 4.5 0 00-6.364 0z">
             <div className="flex justify-center py-2">
-              <svg viewBox="0 0 240 310" className="w-full max-w-[220px] h-auto">
+              <svg viewBox="0 0 300 430" className="w-full max-w-[240px] h-auto">
                 <defs>
-                  <radialGradient id="bodyGlow" cx="50%" cy="40%" r="50%">
+                  <radialGradient id="bodyGlow" cx="50%" cy="35%" r="55%">
                     <stop offset="0%" stopColor="rgba(16,185,129,0.06)" />
                     <stop offset="100%" stopColor="transparent" />
                   </radialGradient>
+                  <linearGradient id="bodyStroke" x1="0" y1="0" x2="0" y2="1">
+                    <stop offset="0%" stopColor="rgba(16,185,129,0.3)" />
+                    <stop offset="100%" stopColor="rgba(59,130,246,0.15)" />
+                  </linearGradient>
                 </defs>
-                <ellipse cx="120" cy="150" rx="90" ry="140" fill="url(#bodyGlow)" />
-                {/* Human silhouette outline */}
-                <path d="M120,8 C132,8 142,18 142,32 C142,46 132,56 120,56 C108,56 98,46 98,32 C98,18 108,8 120,8 Z" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
-                <path d="M108,56 L104,65 L80,72 L58,100 L48,142 L56,145 L70,108 L82,90 L86,170 L80,172 L78,240 L72,285 L92,285 L97,240 L104,195 L120,186 L136,195 L143,240 L148,285 L168,285 L162,240 L160,172 L154,170 L158,90 L170,108 L184,145 L192,142 L182,100 L160,72 L136,65 L132,56" fill="none" stroke="rgba(255,255,255,0.06)" strokeWidth="1" />
+                <ellipse cx="150" cy="200" rx="120" ry="200" fill="url(#bodyGlow)" />
+                {/* Anatomical outline */}
+                <path d={`
+                  M150,14 C164,14 176,26 176,42 C176,58 164,72 150,72 C136,72 124,58 124,42 C124,26 136,14 150,14 Z
+                  M134,72 C128,76 118,82 110,92 L96,110 C88,120 78,138 74,158 L66,192 C64,200 68,204 74,204 L84,200
+                  L96,158 C98,150 104,134 110,122 L116,112 L118,180 L114,200 L108,280 L102,340 L96,390 L98,400 L120,400 L126,390
+                  L134,340 L142,280 L150,250 L158,280 L166,340 L174,390 L180,400 L202,400 L204,390 L198,340 L192,280 L186,200
+                  L182,180 L184,112 L190,122 C196,134 202,150 204,158 L216,200 L226,204 C232,204 236,200 234,192 L226,158
+                  C222,138 212,120 204,110 L190,92 C182,82 172,76 166,72
+                `} fill="none" stroke="url(#bodyStroke)" strokeWidth="1.5" strokeLinejoin="round" />
+                {/* Spine line */}
+                <line x1="150" y1="75" x2="150" y2="245" stroke="rgba(255,255,255,0.04)" strokeWidth="1" strokeDasharray="3,4" />
+                {/* Rib hints */}
+                {[120, 132, 144, 156].map(y => (
+                  <g key={y}>
+                    <path d={`M125,${y} Q150,${y+8} 175,${y}`} fill="none" stroke="rgba(255,255,255,0.03)" strokeWidth="0.8" />
+                  </g>
+                ))}
                 {/* Clickable zones */}
                 {BODY_REGIONS.map(r => (
-                  <ellipse key={r.id} cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry} rx2="4"
+                  <ellipse key={r.id} cx={r.cx} cy={r.cy} rx={r.rx} ry={r.ry}
                     className={`body-zone ${activeRegions.has(r.id) ? 'active' : ''}`}
                     onClick={() => toggleRegion(r.id)} />
                 ))}
@@ -187,7 +205,7 @@ export default function Home() {
                   <text key={`t-${r.id}`} x={r.cx} y={r.cy + 1} textAnchor="middle" dominantBaseline="central"
                     className="pointer-events-none select-none"
                     fill={activeRegions.has(r.id) ? 'rgba(52,211,153,0.95)' : 'rgba(255,255,255,0.25)'}
-                    fontSize="8" fontWeight="600">{r.label.split(' / ')[0]}</text>
+                    fontSize="9" fontWeight="600">{r.label.split(' / ')[0]}</text>
                 ))}
               </svg>
             </div>
@@ -207,9 +225,9 @@ export default function Home() {
             )}
           </Panel>
 
-          {/* ── Actions (post-analysis) ── */}
+          {/* Actions (post-analysis) */}
           {stage === 'done' && (
-            <Panel title="Actions" iconPath="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4">
+            <Panel id="section-actions" title="Actions" iconPath="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4">
               <div className="grid grid-cols-3 gap-2">
                 <ActionBtn label="Print" onClick={() => window.print()}
                   icon={<path d="M17 17h2a2 2 0 002-2v-4a2 2 0 00-2-2H5a2 2 0 00-2 2v4a2 2 0 002 2h2m2 4h6a2 2 0 002-2v-4a2 2 0 00-2-2H9a2 2 0 00-2 2v4a2 2 0 002 2zm8-12V5a2 2 0 00-2-2H9a2 2 0 00-2 2v4h10z" />} />
@@ -219,15 +237,15 @@ export default function Home() {
                   const u = URL.createObjectURL(b); const a = document.createElement('a');
                   a.href = u; a.download = 'clinreason-report.json'; a.click(); URL.revokeObjectURL(u);
                 }} icon={<path d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />} />
-                <ActionBtn label="Share" onClick={() => {}}
-                  icon={<path d="M8.684 13.342C8.886 12.938 9 12.482 9 12c0-.482-.114-.938-.316-1.342m0 2.684a3 3 0 110-2.684m0 2.684l6.632 3.316m-6.632-6l6.632-3.316m0 0a3 3 0 105.367-2.684 3 3 0 00-5.367 2.684zm0 9.316a3 3 0 105.368 2.684 3 3 0 00-5.368-2.684z" />} />
+                <ActionBtn label="New Case" onClick={() => { setCaseText(''); setReport(null); setBaseReport(null); setStage('idle'); setActiveRegions(new Set()); }}
+                  icon={<path d="M12 4v16m8-8H4" />} />
               </div>
             </Panel>
           )}
         </div>
 
-        {/* ── Right Column ── */}
-        <div className="col-span-12 lg:col-span-7 space-y-4">
+        {/* Right Column */}
+        <div className="col-span-12 lg:col-span-7 space-y-4" ref={resultsRef}>
           {stage === 'error' && (
             <div className="panel p-5 animate-fade-in-up border-red-500/20 bg-red-500/[0.03]">
               <div className="flex items-center gap-3">
@@ -245,7 +263,7 @@ export default function Home() {
           {stage === 'idle' && <IdleState />}
 
           {report && stage === 'done' && (
-            <div className="space-y-4 animate-fade-in-up">
+            <div className="space-y-4 animate-fade-in-up" id="section-results">
               {/* Tabs */}
               <div className="flex gap-1 bg-white/[0.02] rounded-xl p-1 border border-white/[0.05]">
                 {([
@@ -290,9 +308,7 @@ export default function Home() {
   );
 }
 
-/* ═══════════════════════════════════════════
-   Sub-components
-   ═══════════════════════════════════════════ */
+/* ═══ Sub-components ═══ */
 
 function StatCard({ label, value, color, icon }: { label: string; value: string; color: string; icon: React.ReactNode }) {
   const cls = color === 'red' ? 'stat-red' : color === 'amber' ? 'stat-amber' : color === 'blue' ? 'stat-blue' : 'stat-emerald';
@@ -308,9 +324,9 @@ function StatCard({ label, value, color, icon }: { label: string; value: string;
   );
 }
 
-function Panel({ title, iconPath, children }: { title: string; iconPath: string; children: React.ReactNode }) {
+function Panel({ title, iconPath, children, id }: { title: string; iconPath: string; children: React.ReactNode; id?: string }) {
   return (
-    <div className="panel p-4">
+    <div className="panel p-4" id={id}>
       <div className="flex items-center gap-2 mb-3">
         <svg className="w-4 h-4 text-emerald-400/50" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d={iconPath} /></svg>
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">{title}</h3>
@@ -329,43 +345,6 @@ function ActionBtn({ label, icon, onClick }: { label: string; icon: React.ReactN
   );
 }
 
-function PipelineBar({ stage, elapsed }: { stage: Stage; elapsed: number }) {
-  const steps = [
-    { key: 'intake', label: 'Parsing' },
-    { key: 'redflags', label: 'Red Flags' },
-    { key: 'differential', label: 'Differential' },
-    { key: 'medsafety', label: 'Med Safety' },
-    { key: 'localise', label: 'Finalising' },
-  ];
-  const idx = steps.findIndex(s => s.key === stage);
-  return (
-    <div className="panel p-4 animate-fade-in-up">
-      <div className="flex items-center justify-between mb-3">
-        <span className="text-[10px] uppercase tracking-widest text-emerald-400/70 font-semibold">AI Pipeline Active</span>
-        <span className="text-[10px] text-slate-500 font-mono">{elapsed}s</span>
-      </div>
-      <div className="flex items-center gap-1">
-        {steps.map((s, i) => {
-          const done = i < idx;
-          const active = i === idx;
-          return (
-            <div key={s.key} className="flex-1 flex flex-col items-center gap-1.5">
-              <div className={`w-full h-1 rounded-full transition-all duration-500 ${
-                done ? 'bg-emerald-500' : active ? 'bg-emerald-500/50 shimmer-bg' : 'bg-white/[0.05]'
-              }`} />
-              <div className="flex items-center gap-1">
-                {done && <svg className="w-3 h-3 text-emerald-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="3"><path d="M5 13l4 4L19 7" /></svg>}
-                {active && <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse" />}
-                <span className={`text-[9px] font-medium ${active ? 'text-emerald-300' : done ? 'text-slate-500' : 'text-slate-600'}`}>{s.label}</span>
-              </div>
-            </div>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
 function IdleState() {
   return (
     <div className="panel p-8 flex flex-col items-center justify-center min-h-[400px] text-center glow-border">
@@ -376,16 +355,16 @@ function IdleState() {
       </div>
       <h2 className="text-lg font-semibold text-white mb-2">Clinical Reasoning Engine</h2>
       <p className="text-sm text-slate-500 max-w-md leading-relaxed mb-6">
-        Enter a patient presentation on the left to run the full AI-powered clinical pipeline — differential diagnosis, red flag triage, medication safety, and multilingual reporting.
+        Enter a patient presentation on the left to run the deterministic clinical pipeline — differential diagnosis, red flag triage, and medication safety, with multilingual support.
       </p>
       <div className="grid grid-cols-3 gap-4 w-full max-w-sm">
         {[
-          { icon: '🔬', title: 'Differential', desc: 'Ranked diagnoses' },
-          { icon: '🚨', title: 'Red Flags', desc: 'Triage screening' },
-          { icon: '💊', title: 'Med Safety', desc: 'Drug interactions' },
+          { title: 'Differential', desc: 'Ranked diagnoses', icon: 'M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2' },
+          { title: 'Red Flags', desc: 'Triage screening', icon: 'M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z' },
+          { title: 'Med Safety', desc: '59 drug interactions', icon: 'M19.428 15.428a2 2 0 00-1.022-.547l-2.387-.477a6 6 0 00-3.86.517l-.318.158a6 6 0 01-3.86.517L6.05 15.21a2 2 0 00-1.806.547M8 4h8l-1 1v5.172a2 2 0 00.586 1.414l5 5c1.26 1.26.367 3.414-1.415 3.414H4.828c-1.782 0-2.674-2.154-1.414-3.414l5-5A2 2 0 009 10.172V5L8 4z' },
         ].map(f => (
           <div key={f.title} className="text-center p-3 rounded-xl bg-white/[0.02] border border-white/[0.04]">
-            <span className="text-lg">{f.icon}</span>
+            <svg className="w-5 h-5 text-emerald-400/50 mx-auto mb-1" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d={f.icon} /></svg>
             <p className="text-[11px] font-semibold text-slate-300 mt-1">{f.title}</p>
             <p className="text-[9px] text-slate-500 mt-0.5">{f.desc}</p>
           </div>
@@ -396,19 +375,18 @@ function IdleState() {
         <span>·</span>
         <span>ICD-10 Codes</span>
         <span>·</span>
-        <span>Evidence-Based</span>
+        <span>40 Conditions</span>
         <span>·</span>
-        <span>40+ Conditions</span>
+        <span>No API Required</span>
       </div>
     </div>
   );
 }
 
-/* ─── Overview Tab ─── */
+/* Overview Tab */
 function OverviewTab({ report, lang }: { report: ClinReport; lang: Lang }) {
   return (
     <div className="space-y-4">
-      {/* Risk Score */}
       <div className="panel p-4 glow-border">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">Risk Assessment</h3>
@@ -424,8 +402,7 @@ function OverviewTab({ report, lang }: { report: ClinReport; lang: Lang }) {
         </div>
       </div>
 
-      {/* Red Flags */}
-      <div className="panel p-4">
+      <div className="panel p-4" id="section-redflags">
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">{t(lang, 'redFlagsTitle')}</h3>
         {report.redFlags.length === 0 ? (
           <div className="flex items-center gap-2 px-3 py-2.5 rounded-lg bg-emerald-500/[0.04] border border-emerald-500/15">
@@ -437,7 +414,7 @@ function OverviewTab({ report, lang }: { report: ClinReport; lang: Lang }) {
             {report.redFlags.map((rf, i) => (
               <div key={i} className={`rounded-xl border px-4 py-3 transition-all hover:translate-x-0.5 ${
                 rf.severity === 'emergency' ? 'bg-red-500/[0.04] border-red-500/20' : 'bg-amber-500/[0.04] border-amber-500/20'
-              }`} style={{ animationDelay: `${i * 80}ms` }}>
+              }`}>
                 <div className="flex items-center gap-2 mb-1">
                   <span className={`text-[9px] font-bold uppercase px-1.5 py-0.5 rounded ${
                     rf.severity === 'emergency' ? 'bg-red-500/20 text-red-300' : 'bg-amber-500/20 text-amber-300'
@@ -452,8 +429,7 @@ function OverviewTab({ report, lang }: { report: ClinReport; lang: Lang }) {
         )}
       </div>
 
-      {/* Top 3 Differentials Preview */}
-      <div className="panel p-4">
+      <div className="panel p-4" id="section-differential">
         <div className="flex items-center justify-between mb-3">
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider">{t(lang, 'differentialTitle')}</h3>
           <span className="text-[9px] text-slate-600">Top 3 shown</span>
@@ -468,13 +444,16 @@ function OverviewTab({ report, lang }: { report: ClinReport; lang: Lang }) {
   );
 }
 
-/* ─── Differential Tab ─── */
+/* Differential Tab */
 function DiffTab({ report, lang }: { report: ClinReport; lang: Lang }) {
   return (
     <div className="space-y-3">
-      {report.differential.map((d, i) => (
-        <DxCard key={i} item={d} rank={i + 1} lang={lang} />
-      ))}
+      {report.differential.map((d, i) => <DxCard key={i} item={d} rank={i + 1} lang={lang} />)}
+      {report.differential.length === 0 && (
+        <div className="panel p-6 text-center">
+          <p className="text-sm text-slate-400">No matching conditions found. Try providing more clinical detail.</p>
+        </div>
+      )}
     </div>
   );
 }
@@ -488,9 +467,7 @@ function DxCard({ item, rank, lang, compact }: { item: ClinReport['differential'
     <div className="panel p-4 hover:border-white/[0.1] transition-all">
       <div className="flex items-start justify-between mb-2">
         <div className="flex items-center gap-2.5">
-          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/8 w-6 h-6 rounded-lg flex items-center justify-center">
-            {rank}
-          </span>
+          <span className="text-[10px] font-bold text-emerald-400 bg-emerald-500/8 w-6 h-6 rounded-lg flex items-center justify-center">{rank}</span>
           <div>
             <h4 className="text-[13px] font-semibold text-white">{item.condition}</h4>
             {item.icd10 && <span className="text-[9px] text-slate-500 font-mono">{item.icd10}</span>}
@@ -521,7 +498,7 @@ function DxCard({ item, rank, lang, compact }: { item: ClinReport['differential'
               <ul className="space-y-0.5">
                 {item.opposing.map((o, i) => (
                   <li key={i} className="text-[11px] text-slate-400 flex items-start gap-1.5">
-                    <span className="text-slate-500 mt-px text-[10px]">−</span>{o}
+                    <span className="text-slate-500 mt-px text-[10px]">{'−'}</span>{o}
                   </li>
                 ))}
                 {item.opposing.length === 0 && <li className="text-[10px] text-slate-600 italic">None identified</li>}
@@ -529,9 +506,7 @@ function DxCard({ item, rank, lang, compact }: { item: ClinReport['differential'
             </div>
           </div>
           <p className="text-[11px] text-slate-300 leading-relaxed mb-2">{item.rationale}</p>
-          <p className="text-[11px] text-emerald-400">
-            <span className="font-semibold">{t(lang, 'nextStep')}:</span> {item.nextStep}
-          </p>
+          <p className="text-[11px] text-emerald-400"><span className="font-semibold">{t(lang, 'nextStep')}:</span> {item.nextStep}</p>
           {item.citations.length > 0 && (
             <div className="mt-2">
               <button onClick={() => setOpen(!open)} className="text-[10px] text-slate-500 hover:text-slate-400 transition-colors">
@@ -549,20 +524,19 @@ function DxCard({ item, rank, lang, compact }: { item: ClinReport['differential'
         </>
       )}
 
-      {compact && (
-        <p className="text-[11px] text-slate-400 line-clamp-2">{item.rationale}</p>
-      )}
+      {compact && <p className="text-[11px] text-slate-400 line-clamp-2">{item.rationale}</p>}
     </div>
   );
 }
 
-/* ─── Med Safety Tab ─── */
+/* Med Safety Tab */
 function MedTab({ report, lang }: { report: ClinReport; lang: Lang }) {
   if (report.medSafety.length === 0) {
     return (
       <div className="panel p-6 text-center">
         <svg className="w-8 h-8 text-emerald-400/30 mx-auto mb-2" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="1.5"><path d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" /></svg>
         <p className="text-sm text-slate-400">No medication safety issues identified</p>
+        <p className="text-[10px] text-slate-600 mt-1">Add medications to the patient description to check for interactions</p>
       </div>
     );
   }
@@ -592,20 +566,16 @@ function MedCard({ item, lang }: { item: ClinReport['medSafety'][number]; lang: 
       </div>
       <p className="text-[12px] text-white font-medium mb-1">{item.drugs.join(' + ')}</p>
       <p className="text-[11px] text-slate-300 leading-relaxed mb-1.5">{item.explanation}</p>
-      <p className="text-[11px] text-emerald-400">
-        <span className="font-semibold">{t(lang, 'recommendation')}:</span> {item.recommendation}
-      </p>
-      {item.citations.length > 0 && (
-        <p className="text-[9px] text-slate-600 mt-1.5">{item.citations.map(c => c.source).join(' · ')}</p>
-      )}
+      <p className="text-[11px] text-emerald-400"><span className="font-semibold">{t(lang, 'recommendation')}:</span> {item.recommendation}</p>
+      {item.citations.length > 0 && <p className="text-[9px] text-slate-600 mt-1.5">{item.citations.map(c => c.source).join(' · ')}</p>}
     </div>
   );
 }
 
-/* ─── Assessment Tab ─── */
+/* Assessment Tab */
 function AssessTab({ report, lang }: { report: ClinReport; lang: Lang }) {
   return (
-    <div className="space-y-4">
+    <div className="space-y-4" id="section-assessment">
       <div className="panel p-5 glow-border">
         <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">{t(lang, 'overallNote')}</h3>
         <p className="text-[13px] text-slate-200 leading-relaxed">{report.overallNote}</p>
@@ -616,9 +586,7 @@ function AssessTab({ report, lang }: { report: ClinReport; lang: Lang }) {
         <div className="grid grid-cols-2 gap-3">
           <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
             <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Patient</p>
-            <p className="text-[12px] text-slate-300">
-              {report.case.age ? `${report.case.age}y` : '?'} {report.case.sex ?? 'unknown'}
-            </p>
+            <p className="text-[12px] text-slate-300">{report.case.age ? `${report.case.age}y` : '?'} {report.case.sex ?? 'unknown'}</p>
           </div>
           <div className="rounded-xl bg-white/[0.02] border border-white/[0.04] p-3">
             <p className="text-[9px] text-slate-500 uppercase tracking-wider font-semibold mb-1">Chief Complaint</p>
@@ -640,7 +608,7 @@ function AssessTab({ report, lang }: { report: ClinReport; lang: Lang }) {
           <h3 className="text-xs font-semibold text-slate-300 uppercase tracking-wider mb-3">Vitals Dashboard</h3>
           <div className="grid grid-cols-5 gap-2">
             <VitalRing label="HR" value={report.case.vitals.hr} unit="bpm" max={180} color="#10b981" normal={[60, 100]} />
-            <VitalRing label="SpO₂" value={report.case.vitals.spo2} unit="%" max={100} color="#3b82f6" normal={[95, 100]} />
+            <VitalRing label="SpO2" value={report.case.vitals.spo2} unit="%" max={100} color="#3b82f6" normal={[95, 100]} />
             <VitalRing label="Temp" value={report.case.vitals.temp} unit="°C" max={42} color="#f59e0b" normal={[36.1, 37.2]} />
             <VitalRing label="RR" value={report.case.vitals.rr} unit="/min" max={40} color="#8b5cf6" normal={[12, 20]} />
             <div className="flex flex-col items-center justify-center">
@@ -657,7 +625,7 @@ function AssessTab({ report, lang }: { report: ClinReport; lang: Lang }) {
   );
 }
 
-/* ─── Helper components ─── */
+/* Helper components */
 
 function RiskBadge({ flags, meds }: { flags: number; meds: number }) {
   const level = flags > 0 ? 'HIGH' : meds > 0 ? 'MODERATE' : 'LOW';

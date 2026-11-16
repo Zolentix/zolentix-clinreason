@@ -14,14 +14,7 @@ export async function POST(req: NextRequest) {
       );
     }
 
-    if (!process.env.GOOGLE_API_KEY) {
-      return NextResponse.json(
-        { error: 'GOOGLE_API_KEY is not configured. Set it in your environment variables.' },
-        { status: 500 }
-      );
-    }
-
-    const report = await runClinReason(caseText, lang ?? 'auto');
+    const report = runClinReason(caseText, lang ?? 'auto');
     return NextResponse.json(report);
   } catch (err) {
     console.error('ClinReason pipeline error:', err);

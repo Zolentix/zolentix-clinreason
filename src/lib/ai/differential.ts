@@ -1,48 +1,92 @@
-import { askGemini, extractJSON } from './gemini';
 import type { PatientCase, DifferentialItem, Condition } from '../types';
 
-const SYSTEM_PROMPT = `You are a clinical reasoning engine that produces a structured differential diagnosis to support (never replace) a qualified clinician. You reason carefully, weigh evidence on both sides, and never overstate certainty.
+function normalise(s: string): string {
+  return s.toLowerCase().replace(/[^a-z0-9\s]/g, '');
+}
 
-Given a structured patient case and a list of candidate conditions, you will:
-1. Consider which conditions the presentation fits, AND which cannot-miss serious conditions must be actively excluded even if less likely.
-2. For each plausible condition, list the features that SUPPORT it and the features that ARGUE AGAINST it from THIS patient's case. Be specific - cite the patient's own symptoms, vitals, history.
-3. Assign a calibrated confidence 0-1. Do not inflate. If the case is ambiguous, reflect that with moderate confidences that sum sensibly.
-4. Give one concrete next step (a test or exam) that would most change your ranking - the highest-information action.
-5. Attach guideline-style citations by naming the relevant guideline/body (e.g. "ESC 2023 ACS guideline", "NICE CG95") and a one-line note. Do not fabricate specific numbers or quotes; cite the source at the guideline level.
+function caseContains(pc: PatientCase, feature: string): boolean {
+  const norm = normalise(feature);
+  const haystack = normalise(
+    [
+      pc.rawText, pc.presentingComplaint,
+      ...pc.symptoms.map(s => s.name),
+      ...pc.history, ...pc.riskFactors,
+      pc.vitals ? `bp ${pc.vitals.bp} hr ${pc.vitals.hr} temp ${pc.vitals.temp} spo2 ${pc.vitals.spo2} rr ${pc.vitals.rr}` : '',
+    ].join(' ')
+  );
+  return haystack.includes(norm);
+}
 
-Hard rules:
-- Output STRICT JSON only, matching the DifferentialItem[] schema provided.
-- Never output a single diagnosis as if certain. Always a ranked differential.
-- If a red-flag emergency pattern is present, still produce the differential, but your rationale must note the urgency.
-- Reason in the clinical content; the final wording will be translated later, so write clearly and plainly in English here.
-- You are decision SUPPORT. Your output will be reviewed by a clinician.`;
+const NEXT_STEPS: Record<string, string> = {
+  cardiac: '12-lead ECG and serial troponin levels',
+  respiratory: 'Chest X-ray and arterial blood gas',
+  neuro: 'CT head and full neurological examination',
+  GI: 'Bloods (FBC, U&E, LFTs, amylase), abdominal imaging',
+  infectious: 'Blood cultures, FBC, CRP/PCT, lactate',
+  endocrine: 'Blood glucose, U&E, thyroid function tests',
+};
 
-export async function generateDifferential(
-  patientCase: PatientCase,
-  conditions: Condition[]
-): Promise<DifferentialItem[]> {
-  const schema = `[{
-    "condition": "string",
-    "icd10": "string",
-    "confidence": 0.0-1.0,
-    "supporting": ["string"],
-    "opposing": ["string"],
-    "rationale": "string (plain-language reasoning)",
-    "nextStep": "string (highest-information investigation)",
-    "citations": [{"source": "string", "note": "string"}]
-  }]`;
+const GUIDELINES: Record<string, { source: string; note: string }> = {
+  cardiac: { source: 'ESC Guidelines', note: 'European Society of Cardiology clinical practice guidelines' },
+  respiratory: { source: 'BTS Guidelines', note: 'British Thoracic Society clinical guidelines' },
+  neuro: { source: 'NICE Guidelines', note: 'National Institute for Health and Care Excellence guidance' },
+  GI: { source: 'BSG Guidelines', note: 'British Society of Gastroenterology clinical guidelines' },
+  infectious: { source: 'NICE / Sepsis Trust', note: 'UK Sepsis Trust and NICE clinical guidelines' },
+  endocrine: { source: 'Endocrine Society', note: 'Endocrine Society clinical practice guidelines' },
+};
 
-  try {
-    const text = await askGemini(
-      SYSTEM_PROMPT,
-      `Patient case:\n${JSON.stringify(patientCase, null, 2)}\n\nCandidate conditions from knowledge base:\n${JSON.stringify(conditions.map(c => ({ name: c.name, icd10: c.icd10, typicalFeatures: c.typicalFeatures, riskFactors: c.riskFactors })), null, 2)}\n\nProduce a ranked differential (top 6) as JSON matching this schema:\n${schema}\n\nOutput ONLY the JSON array, no markdown fences.`
-    );
+export function generateDifferential(patientCase: PatientCase, conditions: Condition[]): DifferentialItem[] {
+  const scored: { c: Condition; score: number; sup: string[]; opp: string[] }[] = [];
 
-    const cleaned = extractJSON(text);
-    const items = JSON.parse(cleaned) as DifferentialItem[];
-    return items.sort((a, b) => b.confidence - a.confidence).slice(0, 6);
-  } catch (err) {
-    console.error('Differential generation failed:', err);
-    return [];
+  for (const c of conditions) {
+    const sup: string[] = [];
+    let score = 0;
+
+    for (const f of c.typicalFeatures) {
+      if (caseContains(patientCase, f)) { sup.push(f); score += 2; }
+    }
+    for (const rf of c.riskFactors) {
+      if (caseContains(patientCase, rf)) { sup.push(`Risk factor: ${rf}`); score += 1; }
+    }
+    for (const rff of c.redFlagFeatures) {
+      if (caseContains(patientCase, rff)) score += 1.5;
+    }
+
+    const opp = c.typicalFeatures
+      .filter(f => !caseContains(patientCase, f))
+      .slice(0, 3)
+      .map(f => `${f} not reported`);
+
+    if (score > 0) scored.push({ c, score, sup, opp });
   }
+
+  scored.sort((a, b) => b.score - a.score);
+  const top = scored.slice(0, 6);
+  const maxScore = top[0]?.score ?? 1;
+
+  return top.map(item => {
+    const raw = item.score / maxScore;
+    const confidence = Math.round(Math.min(0.92, Math.max(0.08, raw * 0.85)) * 100) / 100;
+    const matched = item.sup.filter(s => !s.startsWith('Risk factor')).length;
+    const total = item.c.typicalFeatures.length;
+    const age = patientCase.age ? `${patientCase.age}-year-old` : 'Patient';
+    const sex = patientCase.sex && patientCase.sex !== 'unknown' ? ` ${patientCase.sex}` : '';
+    const rfs = item.sup.filter(s => s.startsWith('Risk factor')).map(s => s.replace('Risk factor: ', ''));
+
+    let rationale = `${age}${sex} presenting with ${matched} of ${total} typical features of ${item.c.name}`;
+    if (rfs.length > 0) rationale += `. Relevant risk factors: ${rfs.join(', ')}`;
+    if (item.opp.length > 0) rationale += `. However, ${item.opp[0].toLowerCase()}`;
+    rationale += '. Clinical correlation recommended.';
+
+    return {
+      condition: item.c.name,
+      icd10: item.c.icd10,
+      confidence,
+      supporting: item.sup.slice(0, 5),
+      opposing: item.opp,
+      rationale,
+      nextStep: NEXT_STEPS[item.c.system] ?? 'Targeted investigation based on clinical presentation',
+      citations: [GUIDELINES[item.c.system] ?? { source: 'Clinical guidelines', note: 'Standard clinical practice' }],
+    };
+  });
 }

@@ -11,11 +11,7 @@ export async function POST(req: NextRequest) {
       return NextResponse.json({ error: 'Missing report or lang' }, { status: 400 });
     }
 
-    if (!process.env.GOOGLE_API_KEY) {
-      return NextResponse.json({ error: 'GOOGLE_API_KEY is not configured.' }, { status: 500 });
-    }
-
-    const localised = await localiseReport(report, lang);
+    const localised = localiseReport(report, lang);
     return NextResponse.json(localised);
   } catch (err) {
     console.error('Localise error:', err);
