@@ -3,25 +3,182 @@
 @tailwind utilities;
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --bg-deep: #060a13;
+  --bg-base: #0a0f1e;
+  --bg-surface: #111827;
+  --bg-raised: #1a2236;
+  --accent: #10b981;
+  --accent-light: #34d399;
+  --danger: #ef4444;
+  --warning: #f59e0b;
+  --info: #3b82f6;
 }
 
 body {
-  color: var(--foreground);
-  background: var(--background);
-  font-family: Arial, Helvetica, sans-serif;
+  font-family: var(--font-geist-sans), system-ui, -apple-system, sans-serif;
+  background: var(--bg-deep);
+  background-image:
+    radial-gradient(ellipse at 15% 0%, rgba(16,185,129,0.04) 0%, transparent 55%),
+    radial-gradient(ellipse at 85% 100%, rgba(59,130,246,0.03) 0%, transparent 55%);
 }
 
-@layer utilities {
-  .text-balance {
-    text-wrap: balance;
-  }
+::-webkit-scrollbar { width: 5px; height: 5px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.08); border-radius: 3px; }
+::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.15); }
+::selection { background-color: rgba(16,185,129,0.3); }
+textarea::placeholder { line-height: 1.6; }
+
+/* ─── Animations ─── */
+@keyframes fadeInUp {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+@keyframes slideInLeft {
+  from { opacity: 0; transform: translateX(-16px); }
+  to { opacity: 1; transform: translateX(0); }
+}
+@keyframes pulseGlow {
+  0%,100% { box-shadow: 0 0 0 0 rgba(16,185,129,0.15); }
+  50% { box-shadow: 0 0 24px 6px rgba(16,185,129,0.1); }
+}
+@keyframes shimmer {
+  0% { background-position: -200% 0; }
+  100% { background-position: 200% 0; }
+}
+@keyframes float {
+  0%,100% { transform: translateY(0); }
+  50% { transform: translateY(-5px); }
+}
+@keyframes scanLine {
+  0% { top: 0; opacity: 1; }
+  100% { top: 100%; opacity: 0; }
+}
+@keyframes ringDraw {
+  from { stroke-dashoffset: 283; }
+}
+@keyframes breathe {
+  0%,100% { opacity: 0.4; }
+  50% { opacity: 1; }
+}
+@keyframes expandBar {
+  from { width: 0%; }
+}
+
+.animate-fade-in-up { animation: fadeInUp 0.45s ease-out both; }
+.animate-fade-in { animation: fadeIn 0.3s ease-out both; }
+.animate-slide-left { animation: slideInLeft 0.4s ease-out both; }
+.animate-pulse-glow { animation: pulseGlow 2.5s ease-in-out infinite; }
+.animate-float { animation: float 3.5s ease-in-out infinite; }
+.animate-breathe { animation: breathe 2s ease-in-out infinite; }
+
+.shimmer-bg {
+  background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.04) 50%, transparent 100%);
+  background-size: 200% 100%;
+  animation: shimmer 2.5s infinite;
+}
+
+/* ─── Glass ─── */
+.glass {
+  background: rgba(17,24,39,0.5);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  border: 1px solid rgba(255,255,255,0.06);
+}
+
+/* ─── Panel ─── */
+.panel {
+  background: rgba(17,24,39,0.4);
+  border: 1px solid rgba(255,255,255,0.06);
+  border-radius: 16px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+.panel:hover {
+  border-color: rgba(255,255,255,0.1);
+  box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+}
+
+/* ─── Gradient borders ─── */
+.glow-border {
+  position: relative;
+}
+.glow-border::before {
+  content: '';
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  padding: 1px;
+  background: linear-gradient(135deg, rgba(16,185,129,0.25), transparent 40%, transparent 60%, rgba(59,130,246,0.2));
+  -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0);
+  -webkit-mask-composite: xor;
+  mask-composite: exclude;
+  pointer-events: none;
+}
+
+/* ─── Body map ─── */
+.body-zone {
+  cursor: pointer;
+  transition: all 0.25s ease;
+  fill: rgba(255,255,255,0.04);
+  stroke: rgba(255,255,255,0.12);
+  stroke-width: 1.5;
+  rx: 4;
+}
+.body-zone:hover {
+  fill: rgba(16,185,129,0.15);
+  stroke: rgba(16,185,129,0.6);
+  filter: drop-shadow(0 0 8px rgba(16,185,129,0.2));
+}
+.body-zone.active {
+  fill: rgba(16,185,129,0.25);
+  stroke: #10b981;
+  stroke-width: 2;
+  filter: drop-shadow(0 0 12px rgba(16,185,129,0.3));
+}
+
+/* ─── Ring gauge ─── */
+.ring-track { fill: none; stroke: rgba(255,255,255,0.06); stroke-width: 4; }
+.ring-value { fill: none; stroke-width: 4; stroke-linecap: round; transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 1s ease; }
+
+/* ─── Stat card accents ─── */
+.stat-emerald { border-top: 2px solid rgba(16,185,129,0.6); }
+.stat-blue { border-top: 2px solid rgba(59,130,246,0.6); }
+.stat-amber { border-top: 2px solid rgba(245,158,11,0.6); }
+.stat-red { border-top: 2px solid rgba(239,68,68,0.6); }
+
+/* ─── Button glow ─── */
+.btn-glow {
+  position: relative;
+  overflow: hidden;
+}
+.btn-glow::after {
+  content: '';
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(135deg, rgba(255,255,255,0.12) 0%, transparent 50%);
+  opacity: 0;
+  transition: opacity 0.3s;
+}
+.btn-glow:hover::after { opacity: 1; }
+
+/* ─── Confidence bar animation ─── */
+.confidence-bar {
+  animation: expandBar 0.8s ease-out both;
+}
+
+/* ─── Custom pipeline connector ─── */
+.pipeline-dot {
+  transition: all 0.4s ease;
+}
+.pipeline-dot.active {
+  box-shadow: 0 0 12px rgba(16,185,129,0.4);
+}
+
+@media print {
+  body { background: white !important; color: black !important; }
+  .no-print { display: none !important; }
 }
