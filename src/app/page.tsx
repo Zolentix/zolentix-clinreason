@@ -54,7 +54,7 @@ function SectionTitle({ icon, title, sub }: { icon: React.ReactNode; title: stri
 /*  Main Page                                                          */
 /* ------------------------------------------------------------------ */
 export default function Home() {
-  const [activeView, setActiveView] = useState<ViewId>('dashboard');
+  const [activeView, setActiveView] = useState<ViewId>('anatomy');
   const [caseText, setCaseText] = useState('');
   const [selectedLang, setSelectedLang] = useState<Lang | 'auto'>('auto');
   const [uiLang, setUiLang] = useState<Lang>('en');
@@ -332,55 +332,50 @@ function PatientView({ caseText, setCaseText, selectedLang, setSelectedLang, onA
 }
 
 /* ================================================================== */
-/*  ANATOMY VIEW                                                       */
+/*  ANATOMY VIEW — Immersive full-screen                               */
 /* ================================================================== */
 function AnatomyViewWrapper() {
   const [selectedInfo, setSelectedInfo] = useState<{ region: string; info: string } | null>(null);
   return (
-    <div className="max-w-6xl mx-auto space-y-4">
-      <SectionTitle icon={<Heart className="w-4 h-4" />} title="3D Anatomy Explorer"
-        sub="Interactive multi-layer anatomical model · Rotate, zoom, toggle systems" />
-      <div className="grid grid-cols-1 lg:grid-cols-[1fr_300px] gap-4">
-        <Panel className="overflow-hidden" style={{ height: '70vh', minHeight: 500 }}>
-          <AnatomyViewer3D onSelectRegion={(region, info) => setSelectedInfo({ region, info })} className="w-full h-full" />
-        </Panel>
-        <div className="space-y-3">
-          <Panel className="p-4">
-            <h3 className="text-xs font-semibold text-white/70 mb-2">Controls</h3>
-            <ul className="text-[10px] text-white/40 space-y-1.5">
-              <li>🖱️ <span className="text-white/60">Left drag</span> — Rotate</li>
-              <li>🖱️ <span className="text-white/60">Scroll</span> — Zoom in/out</li>
-              <li>🎯 <span className="text-white/60">Click structure</span> — View details</li>
-              <li>🔘 <span className="text-white/60">Layer toggles</span> — Show/hide systems</li>
-              <li>📐 <span className="text-white/60">Camera presets</span> — Front, back, side, top</li>
-            </ul>
-          </Panel>
-          {selectedInfo && (
-            <Panel className="p-4">
-              <h3 className="text-xs font-semibold text-white/70 mb-2">Selected Structure</h3>
-              <div className="text-[11px] text-white/80 mb-1">{selectedInfo.info}</div>
-              <span className="text-[10px] text-emerald-400/60 px-2 py-0.5 bg-emerald-500/10 rounded">Region: {selectedInfo.region}</span>
-            </Panel>
-          )}
-          <Panel className="p-4">
-            <h3 className="text-xs font-semibold text-white/70 mb-2">Systems</h3>
-            <div className="space-y-1.5 text-[10px]">
-              {[
-                { label: 'Surface', desc: '18 body shapes', color: '#deb896' },
-                { label: 'Skeletal', desc: '50+ bones & vertebrae', color: '#f5f0e0' },
-                { label: 'Organs', desc: '24 internal organs', color: '#e05577' },
-                { label: 'Muscular', desc: '24 muscle groups', color: '#cc3344' },
-                { label: 'Vascular', desc: '14 arteries & veins', color: '#cc2200' },
-                { label: 'Nervous', desc: '21 nerve pathways', color: '#ffd700' },
-              ].map(s => (
-                <div key={s.label} className="flex items-center gap-2 text-white/50">
-                  <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
-                  <span className="text-white/70 font-medium">{s.label}</span>
-                  <span className="text-white/30">— {s.desc}</span>
-                </div>
-              ))}
+    <div className="-m-5 lg:-m-6" style={{ height: 'calc(100vh - 79px)' }}>
+      <div className="relative w-full h-full">
+        <AnatomyViewer3D onSelectRegion={(region, info) => setSelectedInfo({ region, info })} className="w-full h-full" />
+
+        {/* Floating top bar */}
+        <div className="absolute top-0 left-0 right-0 h-12 bg-gradient-to-b from-black/60 to-transparent pointer-events-none z-10 flex items-center px-5">
+          <div className="pointer-events-auto flex items-center gap-3">
+            <div className="w-7 h-7 rounded-lg bg-emerald-500/20 flex items-center justify-center">
+              <Heart className="w-3.5 h-3.5 text-emerald-400" />
             </div>
-          </Panel>
+            <div>
+              <h2 className="text-[13px] font-semibold text-white leading-none">3D Anatomy Explorer</h2>
+              <p className="text-[9px] text-white/40 mt-0.5">150+ interactive structures · 6 system layers · Click any structure for details</p>
+            </div>
+          </div>
+        </div>
+
+        {/* Selected structure info — floating panel */}
+        {selectedInfo && (
+          <div className="absolute top-14 right-4 w-72 bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 p-4 z-20 shadow-2xl shadow-black/40">
+            <div className="flex items-center justify-between mb-2">
+              <span className="text-[9px] font-bold uppercase tracking-wider text-emerald-400/80">Selected Structure</span>
+              <button onClick={() => setSelectedInfo(null)} className="text-white/30 hover:text-white text-xs">✕</button>
+            </div>
+            <p className="text-[12px] text-white/90 leading-relaxed">{selectedInfo.info}</p>
+            <div className="mt-2 flex items-center gap-2">
+              <span className="text-[9px] text-emerald-400/60 px-2 py-0.5 bg-emerald-500/10 rounded border border-emerald-500/10">Region: {selectedInfo.region}</span>
+            </div>
+          </div>
+        )}
+
+        {/* Floating bottom stats */}
+        <div className="absolute bottom-0 left-0 right-0 h-10 bg-gradient-to-t from-black/50 to-transparent pointer-events-none z-10 flex items-end justify-center pb-2">
+          <div className="flex items-center gap-4 text-[9px] text-white/30">
+            <span className="flex items-center gap-1"><span className="w-1.5 h-1.5 rounded-full bg-emerald-500 animate-pulse" /> WebGL Active</span>
+            <span>Three.js r160</span>
+            <span>150+ structures</span>
+            <span>6 anatomical systems</span>
+          </div>
         </div>
       </div>
     </div>

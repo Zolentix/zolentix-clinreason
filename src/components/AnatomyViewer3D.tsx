@@ -67,8 +67,8 @@ const SKIN: Part[] = [
 
 const SKELETAL: Part[] = [
   // Skull
-  { n:'Skull',         g:'sp', a:[0.09,24,24], p:[0,0.66,0],    c:'#f5f0e0', info:'Cranium — protects the brain', region:'head' },
-  { n:'Jaw',           g:'bx', a:[0.06,0.025,0.04], p:[0,0.575,0.02], c:'#ece5d0', info:'Mandible', region:'head' },
+  { n:'Skull',         g:'sp', a:[0.09,24,24], p:[0,0.66,0],    c:'#f5f0e0', info:'Cranium — 22 bones (8 cranial + 14 facial). Protects brain, supports sensory organs. Sutures fuse by age 20-30.', region:'head' },
+  { n:'Jaw',           g:'bx', a:[0.06,0.025,0.04], p:[0,0.575,0.02], c:'#ece5d0', info:'Mandibula — strongest facial bone, only movable skull bone. Holds lower dentition. TMJ is a synovial hinge joint.', region:'head' },
   { n:'Eye Socket L',  g:'sp', a:[0.018,12,12], p:[-0.035,0.67,0.07], c:'#333', region:'head' },
   { n:'Eye Socket R',  g:'sp', a:[0.018,12,12], p:[0.035,0.67,0.07],  c:'#333', region:'head' },
   // Spine
@@ -117,42 +117,42 @@ const SKELETAL: Part[] = [
 ];
 
 const ORGANS: Part[] = [
-  { n:'Brain',         g:'sp', a:[0.075,24,24], p:[0,0.68,0],    s:[1,0.85,0.95], c:'#d4a0a0', info:'Cerebrum — cognitive processing, 86 billion neurons', region:'head' },
-  { n:'Cerebellum',    g:'sp', a:[0.035,16,16], p:[0,0.62,-0.04], c:'#c09090', info:'Cerebellum — coordination and balance', region:'head' },
-  { n:'Thyroid',       g:'sp', a:[0.02,12,12],  p:[0,0.49,0.03],  s:[1.8,0.8,0.5], c:'#cc6677', info:'Thyroid gland — metabolism regulation', region:'neck' },
-  { n:'Trachea',       g:'cy', a:[0.012,0.012,0.12,12], p:[0,0.44,0.03], c:'#cc9999', info:'Trachea — airway to lungs', region:'neck' },
-  { n:'L Lung',        g:'sp', a:[0.065,20,20], p:[-0.065,0.33,0.01], s:[0.85,1.3,0.8], c:'#cc8899', info:'Left lung — 2 lobes, gas exchange', region:'chest' },
-  { n:'R Lung',        g:'sp', a:[0.07,20,20],  p:[0.06,0.33,0.01],  s:[0.9,1.3,0.8], c:'#cc8899', info:'Right lung — 3 lobes, gas exchange', region:'chest' },
-  { n:'Heart',         g:'sp', a:[0.045,20,20], p:[-0.02,0.3,0.035], s:[1,1.1,0.85], c:'#cc2244', info:'Heart — pumps ~5L blood/min, 100,000 beats/day', region:'chest' },
-  { n:'L Atrium',      g:'sp', a:[0.022,12,12], p:[-0.035,0.33,0.03], c:'#991133', info:'Left atrium — receives oxygenated blood from lungs', region:'chest' },
-  { n:'R Atrium',      g:'sp', a:[0.022,12,12], p:[0.005,0.33,0.03],  c:'#991133', info:'Right atrium — receives deoxygenated blood', region:'chest' },
-  { n:'Aortic Arch',   g:'cy', a:[0.008,0.008,0.04,12], p:[-0.01,0.36,0.035], r:[0,0,0.5], c:'#cc1122', info:'Aortic arch — main artery from heart', region:'chest' },
-  { n:'Liver',         g:'sp', a:[0.07,20,20], p:[0.04,0.19,0.02], s:[1.3,0.7,0.65], c:'#8b3a2a', info:'Liver — 500+ functions, detoxification, bile production', region:'abdomen' },
-  { n:'Stomach',       g:'sp', a:[0.045,20,20], p:[-0.04,0.17,0.025], s:[1,1.2,0.7], c:'#cc8866', info:'Stomach — gastric acid digestion, 1-1.5L capacity', region:'abdomen' },
-  { n:'Spleen',        g:'sp', a:[0.03,16,16], p:[-0.1,0.19,0],  s:[1,1.3,0.6], c:'#884455', info:'Spleen — blood filtration, immune function', region:'abdomen' },
-  { n:'Gallbladder',   g:'sp', a:[0.015,12,12], p:[0.07,0.17,0.04], s:[0.6,1.2,0.5], c:'#669944', info:'Gallbladder — bile storage and concentration', region:'abdomen' },
-  { n:'Pancreas',      g:'ca', a:[0.012,0.07,6,12], p:[0,0.14,0.02], r:[0,0,0.15], c:'#ccaa77', info:'Pancreas — insulin + digestive enzymes', region:'abdomen' },
-  { n:'L Kidney',      g:'sp', a:[0.028,16,16], p:[-0.065,0.12,-0.02], s:[0.6,1,0.5], c:'#993333', info:'Left kidney — blood filtration, 180L/day', region:'back' },
-  { n:'R Kidney',      g:'sp', a:[0.028,16,16], p:[0.065,0.12,-0.02],  s:[0.6,1,0.5], c:'#993333', info:'Right kidney — blood filtration, 180L/day', region:'back' },
-  { n:'L Adrenal',     g:'sp', a:[0.012,10,10], p:[-0.065,0.16,-0.02], s:[1,0.5,0.4], c:'#bbaa44', info:'Left adrenal gland — cortisol, adrenaline', region:'back' },
-  { n:'R Adrenal',     g:'sp', a:[0.012,10,10], p:[0.065,0.16,-0.02],  s:[1,0.5,0.4], c:'#bbaa44', info:'Right adrenal gland — cortisol, adrenaline', region:'back' },
-  { n:'Sm Intestine',  g:'sp', a:[0.065,20,20], p:[0,0.01,0.02],  s:[1,0.9,0.5], c:'#cc9988', info:'Small intestine — 6m long, nutrient absorption', region:'abdomen' },
-  { n:'Lg Intestine',  g:'sp', a:[0.085,20,20], p:[0,0.03,0.015], s:[1,0.8,0.4], c:'#bb8877', info:'Large intestine — water absorption, 1.5m', region:'abdomen' },
-  { n:'Bladder',       g:'sp', a:[0.025,16,16], p:[0,-0.1,0.03],  s:[1,0.8,0.7], c:'#ccaa55', info:'Urinary bladder — stores up to 500mL urine', region:'pelvis' },
-  { n:'Appendix',      g:'ca', a:[0.006,0.02,4,8], p:[0.07,-0.04,0.03], r:[0.3,0,0.8], c:'#cc8877', info:'Appendix — immune tissue, vestigial', region:'abdomen' },
-  { n:'Diaphragm',     g:'cy', a:[0.12,0.12,0.008,20], p:[0,0.23,0.01], c:'#cc7766', info:'Diaphragm — primary breathing muscle', region:'chest' },
+  { n:'Brain',         g:'sp', a:[0.075,24,24], p:[0,0.68,0],    s:[1,0.85,0.95], c:'#d4a0a0', info:'Cerebrum (Telencephalon) — cognitive processing, 86 billion neurons. The largest part of the brain, responsible for thought, memory, language and consciousness.', region:'head' },
+  { n:'Cerebellum',    g:'sp', a:[0.035,16,16], p:[0,0.62,-0.04], c:'#c09090', info:'Cerebellum — coordination, balance and motor learning. Contains more neurons than the rest of the brain combined.', region:'head' },
+  { n:'Thyroid',       g:'sp', a:[0.02,12,12],  p:[0,0.49,0.03],  s:[1.8,0.8,0.5], c:'#cc6677', info:'Glandula thyroidea — butterfly-shaped endocrine gland. Produces T3/T4 hormones regulating metabolism, growth and development.', region:'neck' },
+  { n:'Trachea',       g:'cy', a:[0.012,0.012,0.12,12], p:[0,0.44,0.03], c:'#cc9999', info:'Trachea — 10-12cm cartilaginous airway connecting larynx to bronchi. C-shaped rings maintain patency.', region:'neck' },
+  { n:'L Lung',        g:'sp', a:[0.065,20,20], p:[-0.065,0.33,0.01], s:[0.85,1.3,0.8], c:'#cc8899', info:'Pulmo sinister — left lung, 2 lobes (superior/inferior). ~480 million alveoli for gas exchange. Smaller than right due to cardiac notch.', region:'chest' },
+  { n:'R Lung',        g:'sp', a:[0.07,20,20],  p:[0.06,0.33,0.01],  s:[0.9,1.3,0.8], c:'#cc8899', info:'Pulmo dexter — right lung, 3 lobes (superior/middle/inferior). Slightly larger, handles 55% of respiratory function.', region:'chest' },
+  { n:'Heart',         g:'sp', a:[0.045,20,20], p:[-0.02,0.3,0.035], s:[1,1.1,0.85], c:'#cc2244', info:'Cor — muscular pump, ~300g. 4 chambers, pumps ~5L blood/min at rest, ~100,000 beats/day. Supplied by left and right coronary arteries.', region:'chest' },
+  { n:'L Atrium',      g:'sp', a:[0.022,12,12], p:[-0.035,0.33,0.03], c:'#991133', info:'Atrium sinistrum — receives oxygenated blood from 4 pulmonary veins. Thin-walled, low pressure chamber.', region:'chest' },
+  { n:'R Atrium',      g:'sp', a:[0.022,12,12], p:[0.005,0.33,0.03],  c:'#991133', info:'Atrium dextrum — receives systemic venous blood from SVC and IVC. Contains SA node (pacemaker).', region:'chest' },
+  { n:'Aortic Arch',   g:'cy', a:[0.008,0.008,0.04,12], p:[-0.01,0.36,0.035], r:[0,0,0.5], c:'#cc1122', info:'Arcus aortae — gives rise to brachiocephalic trunk, left common carotid and left subclavian arteries.', region:'chest' },
+  { n:'Liver',         g:'sp', a:[0.07,20,20], p:[0.04,0.19,0.02], s:[1.3,0.7,0.65], c:'#8b3a2a', info:'Hepar — largest internal organ (~1.5kg). 500+ metabolic functions including detoxification, bile synthesis, glycogen storage, protein production.', region:'abdomen' },
+  { n:'Stomach',       g:'sp', a:[0.045,20,20], p:[-0.04,0.17,0.025], s:[1,1.2,0.7], c:'#cc8866', info:'Gaster (Ventriculus) — J-shaped muscular organ. Secretes HCl (pH 1.5-3.5) and pepsin. Capacity 1-1.5L. 4 regions: cardia, fundus, body, pylorus.', region:'abdomen' },
+  { n:'Spleen',        g:'sp', a:[0.03,16,16], p:[-0.1,0.19,0],  s:[1,1.3,0.6], c:'#884455', info:'Lien (Splen) — largest lymphoid organ. Filters blood, recycles iron from old erythrocytes, stores platelets and monocytes.', region:'abdomen' },
+  { n:'Gallbladder',   g:'sp', a:[0.015,12,12], p:[0.07,0.17,0.04], s:[0.6,1.2,0.5], c:'#669944', info:'Vesica biliaris (Vesica fellea) — stores and concentrates bile (30-50mL). Releases via cystic duct into common bile duct.', region:'abdomen' },
+  { n:'Pancreas',      g:'ca', a:[0.012,0.07,6,12], p:[0,0.14,0.02], r:[0,0,0.15], c:'#ccaa77', info:'Pancreas — dual function: exocrine (digestive enzymes, 1.5L/day) and endocrine (islets of Langerhans produce insulin, glucagon).', region:'abdomen' },
+  { n:'L Kidney',      g:'sp', a:[0.028,16,16], p:[-0.065,0.12,-0.02], s:[0.6,1,0.5], c:'#993333', info:'Ren sinister — bean-shaped, ~150g. Contains ~1 million nephrons. Filters 180L blood/day, produces 1-2L urine. Regulates electrolytes, pH, blood pressure.', region:'back' },
+  { n:'R Kidney',      g:'sp', a:[0.028,16,16], p:[0.065,0.12,-0.02],  s:[0.6,1,0.5], c:'#993333', info:'Ren dexter — slightly lower than left (displaced by liver). Same function: filtration, reabsorption, secretion, excretion.', region:'back' },
+  { n:'L Adrenal',     g:'sp', a:[0.012,10,10], p:[-0.065,0.16,-0.02], s:[1,0.5,0.4], c:'#bbaa44', info:'Glandula suprarenalis sinistra — cortex produces cortisol, aldosterone, androgens. Medulla produces epinephrine and norepinephrine.', region:'back' },
+  { n:'R Adrenal',     g:'sp', a:[0.012,10,10], p:[0.065,0.16,-0.02],  s:[1,0.5,0.4], c:'#bbaa44', info:'Glandula suprarenalis dextra — triangular shape. Essential for stress response, metabolism, immune regulation and blood pressure.', region:'back' },
+  { n:'Sm Intestine',  g:'sp', a:[0.065,20,20], p:[0,0.01,0.02],  s:[1,0.9,0.5], c:'#cc9988', info:'Intestinum tenue — 6-7m long. Three parts: duodenum, jejunum, ileum. Primary site of nutrient absorption via villi (surface area ~32m²).', region:'abdomen' },
+  { n:'Lg Intestine',  g:'sp', a:[0.085,20,20], p:[0,0.03,0.015], s:[1,0.8,0.4], c:'#bb8877', info:'Intestinum crassum — 1.5m colon. Ascending, transverse, descending, sigmoid. Water/electrolyte absorption, bacterial fermentation, feces formation.', region:'abdomen' },
+  { n:'Bladder',       g:'sp', a:[0.025,16,16], p:[0,-0.1,0.03],  s:[1,0.8,0.7], c:'#ccaa55', info:'Vesica urinaria — muscular reservoir, capacity 400-600mL. Detrusor muscle contracts for micturition. Lined by transitional epithelium.', region:'pelvis' },
+  { n:'Appendix',      g:'ca', a:[0.006,0.02,4,8], p:[0.07,-0.04,0.03], r:[0.3,0,0.8], c:'#cc8877', info:'Appendix vermiformis — 5-10cm blind-ended tube at cecum. Gut-associated lymphoid tissue (GALT), immune function.', region:'abdomen' },
+  { n:'Diaphragm',     g:'cy', a:[0.12,0.12,0.008,20], p:[0,0.23,0.01], c:'#cc7766', info:'Diaphragma — dome-shaped musculotendinous partition. Primary respiratory muscle. Innervated by phrenic nerve (C3-C5).', region:'chest' },
 ];
 
 const MUSCULAR: Part[] = [
-  { n:'L Pectoralis',  g:'bx', a:[0.06,0.07,0.025], p:[-0.065,0.37,0.05], r:[0,0.1,0], c:'#cc3344', info:'Pectoralis major — chest, arm adduction', region:'chest' },
-  { n:'R Pectoralis',  g:'bx', a:[0.06,0.07,0.025], p:[0.065,0.37,0.05],  r:[0,-0.1,0], c:'#cc3344', info:'Pectoralis major — chest, arm adduction', region:'chest' },
-  { n:'L Deltoid',     g:'sp', a:[0.04,16,16], p:[-0.195,0.42,0], s:[1,1.2,0.8], c:'#cc4455', info:'Deltoid — shoulder abduction', region:'upper_limb' },
-  { n:'R Deltoid',     g:'sp', a:[0.04,16,16], p:[0.195,0.42,0],  s:[1,1.2,0.8], c:'#cc4455', info:'Deltoid — shoulder abduction', region:'upper_limb' },
-  { n:'L Biceps',      g:'ca', a:[0.03,0.12,6,12], p:[-0.21,0.28,0.015], c:'#cc3344', info:'Biceps brachii — forearm flexion', region:'upper_limb' },
-  { n:'R Biceps',      g:'ca', a:[0.03,0.12,6,12], p:[0.21,0.28,0.015],  c:'#cc3344', info:'Biceps brachii — forearm flexion', region:'upper_limb' },
-  { n:'L Triceps',     g:'ca', a:[0.028,0.12,6,12], p:[-0.21,0.28,-0.015], c:'#bb2233', info:'Triceps brachii — forearm extension', region:'upper_limb' },
-  { n:'R Triceps',     g:'ca', a:[0.028,0.12,6,12], p:[0.21,0.28,-0.015],  c:'#bb2233', info:'Triceps brachii — forearm extension', region:'upper_limb' },
-  { n:'Rectus Abd.',   g:'bx', a:[0.055,0.16,0.02], p:[0,0.12,0.055], c:'#cc3344', info:'Rectus abdominis — core flexion, "six-pack"', region:'abdomen' },
+  { n:'L Pectoralis Major',  g:'bx', a:[0.06,0.07,0.025], p:[-0.065,0.37,0.05], r:[0,0.1,0], c:'#cc3344', info:'Musculus pectoralis major — large fan-shaped muscle. Origin: clavicle, sternum, ribs 1-6. Insertion: humerus. Actions: flexion, adduction, internal rotation of arm.', region:'chest' },
+  { n:'R Pectoralis Major',  g:'bx', a:[0.06,0.07,0.025], p:[0.065,0.37,0.05],  r:[0,-0.1,0], c:'#cc3344', info:'Musculus pectoralis major — large fan-shaped muscle. Origin: clavicle, sternum, ribs 1-6. Insertion: humerus. Actions: flexion, adduction, internal rotation of arm.', region:'chest' },
+  { n:'L Deltoid',     g:'sp', a:[0.04,16,16], p:[-0.195,0.42,0], s:[1,1.2,0.8], c:'#cc4455', info:'Musculus deltoideus — 3 parts (anterior, lateral, posterior). Primary shoulder abductor. Innervated by axillary nerve (C5-C6).', region:'upper_limb' },
+  { n:'R Deltoid',     g:'sp', a:[0.04,16,16], p:[0.195,0.42,0],  s:[1,1.2,0.8], c:'#cc4455', info:'Musculus deltoideus — 3 parts (anterior, lateral, posterior). Primary shoulder abductor. Innervated by axillary nerve (C5-C6).', region:'upper_limb' },
+  { n:'L Biceps Brachii', g:'ca', a:[0.03,0.12,6,12], p:[-0.21,0.28,0.015], c:'#cc3344', info:'Musculus biceps brachii — 2 heads (long, short). Forearm flexion and supination. Innervated by musculocutaneous nerve (C5-C6).', region:'upper_limb' },
+  { n:'R Biceps Brachii', g:'ca', a:[0.03,0.12,6,12], p:[0.21,0.28,0.015],  c:'#cc3344', info:'Musculus biceps brachii — 2 heads (long, short). Forearm flexion and supination. Innervated by musculocutaneous nerve (C5-C6).', region:'upper_limb' },
+  { n:'L Triceps Brachii', g:'ca', a:[0.028,0.12,6,12], p:[-0.21,0.28,-0.015], c:'#bb2233', info:'Musculus triceps brachii — 3 heads (long, lateral, medial). Primary forearm extensor. Innervated by radial nerve (C6-C8).', region:'upper_limb' },
+  { n:'R Triceps Brachii', g:'ca', a:[0.028,0.12,6,12], p:[0.21,0.28,-0.015],  c:'#bb2233', info:'Musculus triceps brachii — 3 heads (long, lateral, medial). Primary forearm extensor. Innervated by radial nerve (C6-C8).', region:'upper_limb' },
+  { n:'Rectus Abdominis', g:'bx', a:[0.055,0.16,0.02], p:[0,0.12,0.055], c:'#cc3344', info:'Musculus rectus abdominis — paired strap muscle, divided by tendinous intersections. Trunk flexion, compression of abdominal contents.', region:'abdomen' },
   { n:'L Oblique',     g:'bx', a:[0.04,0.12,0.015], p:[-0.1,0.12,0.04], r:[0,0.3,0], c:'#bb2233', info:'External oblique — trunk rotation', region:'abdomen' },
   { n:'R Oblique',     g:'bx', a:[0.04,0.12,0.015], p:[0.1,0.12,0.04],  r:[0,-0.3,0], c:'#bb2233', info:'External oblique — trunk rotation', region:'abdomen' },
   { n:'L Trapezius',   g:'bx', a:[0.07,0.1,0.012], p:[-0.06,0.4,-0.04], r:[0.15,0,0], c:'#bb3344', info:'Trapezius — scapula movement', region:'back' },
@@ -250,7 +250,7 @@ function SkinLayer({ opacity, onSelect, onHover }: { opacity: number; onSelect: 
   return <group>
     {SKIN.map(p => (
       <PartMesh key={p.n} part={p} onClick={() => onSelect(p)} onHover={onHover}
-        material={<meshPhysicalMaterial color={p.c} transparent opacity={opacity * 0.35} roughness={0.4} transmission={0.5} thickness={0.3} side={THREE.DoubleSide} />}
+        material={<meshPhysicalMaterial color={p.c} transparent opacity={opacity * 0.28} roughness={0.35} transmission={0.6} thickness={0.4} clearcoat={0.2} clearcoatRoughness={0.3} side={THREE.DoubleSide} ior={1.4} />}
       />
     ))}
   </group>;
@@ -324,7 +324,7 @@ export interface AnatomyViewer3DProps {
 }
 
 export default function AnatomyViewer3D({ onSelectRegion, className }: AnatomyViewer3DProps) {
-  const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(new Set(['skin', 'organs']));
+  const [activeLayers, setActiveLayers] = useState<Set<LayerId>>(new Set(['skin', 'skeletal', 'organs', 'vascular']));
   const [selected, setSelected] = useState<Part | null>(null);
   const [hovered, setHovered] = useState<string | null>(null);
   const [autoRotate, setAutoRotate] = useState(true);
@@ -361,14 +361,16 @@ export default function AnatomyViewer3D({ onSelectRegion, className }: AnatomyVi
         gl={{ antialias: true, toneMapping: THREE.ACESFilmicToneMapping, toneMappingExposure: 1.1 }}
         onPointerDown={() => setAutoRotate(false)}
       >
-        <color attach="background" args={['#060d18']} />
-        <fog attach="fog" args={['#060d18', 3, 6]} />
+        <color attach="background" args={['#050b15']} />
+        <fog attach="fog" args={['#050b15', 3.5, 7]} />
 
-        <ambientLight intensity={0.25} />
-        <directionalLight position={[3, 4, 3]} intensity={0.9} color="#ffffff" />
-        <pointLight position={[-2, 1.5, 2]} intensity={0.5} color="#10b981" distance={6} />
-        <pointLight position={[2, -0.5, -1.5]} intensity={0.35} color="#06b6d4" distance={5} />
-        <pointLight position={[0, 2, 0]} intensity={0.2} color="#8b5cf6" distance={4} />
+        <ambientLight intensity={0.3} />
+        <directionalLight position={[3, 5, 4]} intensity={1.1} color="#fff5ee" castShadow />
+        <directionalLight position={[-2, 3, -2]} intensity={0.4} color="#e0e8ff" />
+        <pointLight position={[-2, 1.5, 2.5]} intensity={0.6} color="#10b981" distance={6} />
+        <pointLight position={[2, -0.5, -1.5]} intensity={0.4} color="#06b6d4" distance={5} />
+        <pointLight position={[0, 2.5, 0.5]} intensity={0.25} color="#8b5cf6" distance={4} />
+        <pointLight position={[0, -1, 2]} intensity={0.15} color="#f59e0b" distance={3} />
 
         <AutoRotate enabled={autoRotate} />
 
@@ -395,8 +397,9 @@ export default function AnatomyViewer3D({ onSelectRegion, className }: AnatomyVi
 
       {/* Hover Label */}
       {hovered && (
-        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-3 py-1.5 bg-black/70 backdrop-blur-md rounded-lg border border-white/10 text-xs text-white/90 pointer-events-none z-10">
-          {hovered}
+        <div className="absolute top-4 left-1/2 -translate-x-1/2 px-4 py-2 bg-[#0a1628]/90 backdrop-blur-xl rounded-lg border border-emerald-500/20 shadow-lg shadow-emerald-500/5 pointer-events-none z-10">
+          <div className="text-[12px] font-semibold text-white">{hovered}</div>
+          <div className="text-[9px] text-emerald-400/60 mt-0.5">Click to view details</div>
         </div>
       )}
 
@@ -436,25 +439,52 @@ export default function AnatomyViewer3D({ onSelectRegion, className }: AnatomyVi
         </button>
       </div>
 
-      {/* Selected Part Info Panel */}
+      {/* Selected Part Info Panel — Complete Anatomy style */}
       {selected && (
-        <div className="absolute top-4 right-4 w-64 bg-black/80 backdrop-blur-xl rounded-xl border border-white/10 p-4 z-10">
-          <div className="flex items-center justify-between mb-2">
-            <h3 className="text-sm font-semibold text-white">{selected.n}</h3>
-            <button onClick={() => setSelected(null)} className="text-white/40 hover:text-white text-xs">✕</button>
-          </div>
-          {selected.info && <p className="text-[11px] text-white/60 leading-relaxed">{selected.info}</p>}
-          {selected.region && (
-            <div className="mt-2 px-2 py-1 bg-emerald-500/10 rounded text-[10px] text-emerald-400 inline-block">
-              Region: {selected.region}
+        <div className="absolute top-4 right-4 w-72 bg-[#0a1628]/95 backdrop-blur-xl rounded-xl border border-white/[0.08] shadow-2xl shadow-black/50 z-20 overflow-hidden">
+          {/* Header breadcrumb */}
+          <div className="px-4 pt-3 pb-2 border-b border-white/[0.06] bg-white/[0.02]">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-1.5 text-[9px] text-white/30 uppercase tracking-wider">
+                {selected.region && <><span className="text-emerald-400/50">{selected.region}</span><span>›</span></>}
+                <span className="text-white/50">{selected.n}</span>
+              </div>
+              <button onClick={() => setSelected(null)} className="text-white/30 hover:text-white text-xs w-5 h-5 flex items-center justify-center rounded hover:bg-white/10 transition-all">✕</button>
             </div>
-          )}
+            <h3 className="text-[14px] font-bold text-white mt-1 leading-tight">{selected.n}</h3>
+          </div>
+
+          {/* Tabs row */}
+          <div className="flex border-b border-white/[0.06] text-[10px]">
+            <div className="px-4 py-2 text-emerald-400 border-b border-emerald-400 font-semibold">Info</div>
+            <div className="px-4 py-2 text-white/30">Clinical</div>
+            <div className="px-4 py-2 text-white/30">Relations</div>
+          </div>
+
+          {/* Content */}
+          <div className="p-4 max-h-[300px] overflow-y-auto">
+            {selected.info && (
+              <div className="mb-3">
+                <h4 className="text-[9px] font-bold uppercase tracking-wider text-white/40 mb-1.5">Structure / Morphology</h4>
+                <p className="text-[11px] text-white/70 leading-[1.6]">{selected.info}</p>
+              </div>
+            )}
+            {selected.region && (
+              <div>
+                <h4 className="text-[9px] font-bold uppercase tracking-wider text-white/40 mb-1.5">Anatomical Region</h4>
+                <span className="text-[10px] text-emerald-400/80 px-2 py-1 bg-emerald-500/10 rounded border border-emerald-500/10 inline-block">
+                  {selected.region.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+                </span>
+              </div>
+            )}
+          </div>
         </div>
       )}
 
       {/* Stats */}
-      <div className="absolute bottom-4 right-4 text-[10px] text-white/30 z-10">
-        {SKIN.length + SKELETAL.length + ORGANS.length + MUSCULAR.length + VASCULAR_LINES.length + NERVOUS_LINES.length} structures · 6 systems
+      <div className="absolute bottom-4 right-4 text-[9px] text-white/25 z-10 flex items-center gap-2">
+        <span className="w-1.5 h-1.5 rounded-full bg-emerald-500/50 animate-pulse" />
+        {SKIN.length + SKELETAL.length + ORGANS.length + MUSCULAR.length + VASCULAR_LINES.length + NERVOUS_LINES.length} interactive structures · 6 systems · WebGL
       </div>
     </div>
   );
