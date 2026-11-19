@@ -210,7 +210,7 @@ function DashboardView({ onNavigate, report, stage }: { onNavigate: (v: ViewId) 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-3">
         {[
           { icon: <Brain className="w-5 h-5" />, title: 'AI Patient Intake', desc: 'Guided conversational assessment with AI-powered clinical reasoning', view: 'patient' as ViewId, color: 'from-violet-500/10 to-purple-500/10 border-violet-500/10' },
-          { icon: <Heart className="w-5 h-5" />, title: '3D Anatomy Explorer', desc: '150+ structures, 6 system layers, interactive rotation and zoom', view: 'anatomy' as ViewId, color: 'from-rose-500/10 to-pink-500/10 border-rose-500/10' },
+          { icon: <Heart className="w-5 h-5" />, title: '3D Anatomy Explorer', desc: '1,225 real anatomical structures, 6 system layers, interactive rotation and zoom', view: 'anatomy' as ViewId, color: 'from-rose-500/10 to-pink-500/10 border-rose-500/10' },
           { icon: <Search className="w-5 h-5" />, title: 'Knowledge Base', desc: 'Search conditions, drugs, ICD-10 codes, and clinical guidelines', view: 'search' as ViewId, color: 'from-cyan-500/10 to-teal-500/10 border-cyan-500/10' },
         ].map(item => (
           <button key={item.title} onClick={() => onNavigate(item.view)}
@@ -368,12 +368,12 @@ function AnatomyViewWrapper() {
             <h3 className="text-xs font-semibold text-white/70 mb-2">Systems</h3>
             <div className="space-y-1.5 text-[10px]">
               {[
-                { label: 'Surface', desc: '18 body shapes', color: '#deb896' },
-                { label: 'Skeletal', desc: '50+ bones & vertebrae', color: '#f5f0e0' },
-                { label: 'Organs', desc: '24 internal organs', color: '#e05577' },
-                { label: 'Muscular', desc: '24 muscle groups', color: '#cc3344' },
-                { label: 'Vascular', desc: '14 arteries & veins', color: '#cc2200' },
-                { label: 'Nervous', desc: '21 nerve pathways', color: '#ffd700' },
+                { label: 'Skeletal', desc: '240 real bones', color: '#f5f0e0' },
+                { label: 'Muscular', desc: '552 real muscles', color: '#cc3344' },
+                { label: 'Connective', desc: '433 ligaments & discs', color: '#6688aa' },
+                { label: 'Organs', desc: '17 internal organs', color: '#e05577' },
+                { label: 'Vascular', desc: 'Arteries & veins', color: '#cc2200' },
+                { label: 'Nervous', desc: 'Nerves & plexuses', color: '#ffd700' },
               ].map(s => (
                 <div key={s.label} className="flex items-center gap-2 text-white/50">
                   <span className="w-2 h-2 rounded-full" style={{ background: s.color }} />
